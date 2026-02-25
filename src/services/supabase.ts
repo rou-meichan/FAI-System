@@ -1,27 +1,39 @@
+// Importing necessary packages
 import { createClient } from '@supabase/supabase-js';
 
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+// Creating the Supabase client
+const supabaseUrl = 'YOUR_SUPABASE_URL';
+const supabaseAnonKey = 'YOUR_SUPABASE_ANON_KEY';
+const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
-if (!supabaseUrl || !supabaseAnonKey) {
-  console.error('Supabase URL or Anon Key is missing. Please check your environment variables.');
-}
-
-export const supabase = createClient(supabaseUrl, supabaseAnonKey);
-
-// Helper types for the database
-export type Profile = {
-  id: string;
-  role: 'supplier' | 'iqa';
-  updated_at?: string;
+// Function for signing up a user
+export const signUpUser = async (email, password) => {
+    const { user, error } = await supabase.auth.signUp({ email, password });
+    if (error) throw error;
+    return user;
 };
 
-export type FAI = {
-  id: string;
-  supplier_id: string;
-  title: string;
-  submission_date: string;
-  status: 'submitted' | 'approved' | 'rejected';
-  remarks?: string;
-  created_at?: string;
+// Function for logging in a user
+export const loginUser = async (email, password) => {
+    const { user, error } = await supabase.auth.signIn({ email, password });
+    if (error) throw error;
+    return user;
+};
+
+// Function to insert FAI
+export const insertFAI = async (faiData) => {
+    const { data, error } = await supabase
+        .from('FAIs')
+        .insert([faiData]);
+    if (error) throw error;
+    return data;
+};
+
+// Function to fetch FAIs with RLS policies
+export const fetchFAIs = async () => {
+    const { data, error } = await supabase
+        .from('FAIs')
+        .select('*');
+    if (error) throw error;
+    return data;
 };
