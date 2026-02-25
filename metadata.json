@@ -1,0 +1,7 @@
+{
+  "name": "FAI Digital Agent",
+  "description": "An AI-powered First Article Inspection (FAI) system that digitizes the paper-based IQA process, providing automated document validation and compliance analysis.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}
