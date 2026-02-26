@@ -2,9 +2,6 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { FAISubmission, SubmissionStatus, DocType } from "../types";
 
-// Always use const ai = new GoogleGenAI({apiKey: process.env.API_KEY});
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-
 /**
  * Gemini supported MIME types for multimodal input (inlineData)
  * as of current documentation.
@@ -19,7 +16,15 @@ const SUPPORTED_AI_MIMES = [
 ];
 
 export const analyzeFAISubmission = async (submission: FAISubmission): Promise<any> => {
-  const model = 'gemini-3-flash-preview';
+  // Initialize AI inside the function to ensure fresh API key access
+  const apiKey = process.env.GEMINI_API_KEY || (import.meta as any).env.VITE_GEMINI_API_KEY;
+  
+  if (!apiKey || apiKey === 'undefined') {
+    throw new Error("Gemini API Key is missing or invalid. Please ensure GEMINI_API_KEY is set in the environment.");
+  }
+
+  const ai = new GoogleGenAI({ apiKey });
+  const model = 'gemini-3.1-pro-preview';
 
   // 1. Filter and prepare only supported media files for the AI to "See"
   const supportedMediaFiles = submission.files.filter(f => 

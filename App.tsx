@@ -11,7 +11,7 @@ import EmployeeDetail from './components/EmployeeDetail';
 import RegistrationPage from './components/RegistrationPage';
 import { FAISubmission, SubmissionStatus, User, SupplierAccount, EmployeeAccount, FAIFile } from './types';
 import { analyzeFAISubmission } from './services/geminiService';
-import { supabase, fetchFAIs, insertFAI, updateFAIStatus } from './services/supabase';
+import { supabase, fetchFAIs, insertFAI, updateFAIStatus, uploadFAIFile } from './services/supabase';
 
 type ViewType = 'DASHBOARD' | 'PROFILE' | 'SUPPLIERS' | 'FAI_REQUESTS' | 'REGISTER_SUPPLIER' | 'REGISTER_EMPLOYEE';
 
@@ -136,17 +136,25 @@ const App: React.FC = () => {
       try {
         const faiRecords = await fetchFAIs();
         if (faiRecords) {
-          const mappedSubmissions: FAISubmission[] = faiRecords.map((record: any) => ({
-            id: record.id,
-            supplierName: record.payload?.supplierName || 'Unknown',
-            partNumber: record.payload?.partNumber || 'N/A',
-            revision: record.payload?.revision || '-',
-            timestamp: new Date(record.submission_date).getTime(),
-            status: record.status === 'submitted' ? SubmissionStatus.PENDING_REVIEW : record.status.toUpperCase() as SubmissionStatus,
-            files: record.payload?.files || [],
-            iqaRemarks: record.remarks,
-            aiAnalysis: record.payload?.aiAnalysis,
-          }));
+          const mappedSubmissions: FAISubmission[] = faiRecords.map((record: any) => {
+            // Map DB status to UI status
+            let uiStatus = record.status.toUpperCase() as SubmissionStatus;
+            if (record.status === 'submitted') {
+              uiStatus = record.payload?.aiAnalysis ? SubmissionStatus.PENDING_REVIEW : SubmissionStatus.PENDING_AI;
+            }
+
+            return {
+              id: record.id,
+              supplierName: record.payload?.supplierName || 'Unknown',
+              partNumber: record.payload?.partNumber || 'N/A',
+              revision: record.payload?.revision || '-',
+              timestamp: new Date(record.submission_date).getTime(),
+              status: uiStatus,
+              files: record.payload?.files || [],
+              iqaRemarks: record.remarks,
+              aiAnalysis: record.payload?.aiAnalysis,
+            };
+          });
           setSubmissions(mappedSubmissions);
         }
 
@@ -178,17 +186,29 @@ const App: React.FC = () => {
       setSubmissions(prev => prev.map(s => s.id === id ? { ...s, status: SubmissionStatus.PENDING_REVIEW, aiAnalysis: analysisResult } : s));
       
       // Update Supabase
-      const target = submissions.find(s => s.id === id);
-      if (target) {
-        await supabase
-          .from('fai')
-          .update({ 
-            status: 'pending_review',
-            payload: { ...target.payload, aiAnalysis: analysisResult } 
-          })
-          .eq('id', id);
-      }
+      // We use the 'sub' object passed in which contains the latest data
+      // We must strip large Base64 data and file objects before saving to DB
+      const cleanFiles = sub.files.map(({ data, fileObject, ...rest }) => rest);
+      
+      const updatedPayload = {
+        supplierName: sub.supplierName,
+        partNumber: sub.partNumber,
+        revision: sub.revision,
+        files: cleanFiles,
+        aiAnalysis: analysisResult
+      };
+
+      const { error } = await supabase
+        .from('fai')
+        .update({ 
+          status: 'submitted',
+          payload: updatedPayload
+        })
+        .eq('id', id);
+      
+      if (error) throw error;
     } catch (err) {
+      console.error('AI Analysis or Supabase update failed:', err);
       setSubmissions(prev => prev.map(s => s.id === id ? { ...s, status: SubmissionStatus.REJECTED, iqaRemarks: 'System processing error during AI audit.' } : s));
     }
   };
@@ -199,46 +219,80 @@ const App: React.FC = () => {
     try {
       const submissionWithOrg = { ...newSubmission, supplierName: user.organization };
       
+      // Upload files to Supabase Storage first
+      const filesWithPaths = await Promise.all(
+        submissionWithOrg.files.map(async (f) => {
+          if (f.fileObject) {
+            const path = await uploadFAIFile(user.id, f.fileObject);
+            return { ...f, filePath: path };
+          }
+          return f;
+        })
+      );
+
+      // Prepare files for DB (remove large base64 data and file objects)
+      const dbFiles = filesWithPaths.map(({ data, fileObject, ...rest }) => rest);
+
       // Save to Supabase
       const record = {
         supplier_id: user.id,
         title: `${submissionWithOrg.partNumber} Rev ${submissionWithOrg.revision}`,
-        status: 'pending_ai',
+        status: 'submitted', // Use standard DB status
         payload: {
           supplierName: submissionWithOrg.supplierName,
           partNumber: submissionWithOrg.partNumber,
           revision: submissionWithOrg.revision,
-          files: submissionWithOrg.files
+          files: dbFiles
         }
       };
       
       const saved = await insertFAI(record);
       if (saved && saved[0]) {
-        const finalSub = { ...submissionWithOrg, id: saved[0].id };
-        setSubmissions(prev => [finalSub, ...prev]);
-        await runAnalysis(finalSub.id, finalSub);
+        // Keep the data in memory for AI analysis but use the DB-friendly version for state
+        const finalSubForState = { ...submissionWithOrg, id: saved[0].id, files: dbFiles };
+        const finalSubForAnalysis = { ...submissionWithOrg, id: saved[0].id, files: filesWithPaths };
+        
+        setSubmissions(prev => [finalSubForState, ...prev]);
+        await runAnalysis(finalSubForState.id, finalSubForAnalysis);
       }
     } catch (err) {
       console.error('Error saving submission:', err);
+      throw err;
     }
   };
 
   const handleUpdateSubmission = async (submissionId: string, updatedFiles: FAIFile[]) => {
+    if (!user) return;
+    
     setSubmissions(prev => prev.map(s => s.id === submissionId ? { ...s, status: SubmissionStatus.PENDING_AI, files: updatedFiles, aiAnalysis: undefined, isNewVerdict: false } : s));
     const target = submissions.find(s => s.id === submissionId);
     if (target) {
-      const updatedSub = { ...target, files: updatedFiles, status: SubmissionStatus.PENDING_AI };
+      // Upload new files to Supabase Storage
+      const filesWithPaths = await Promise.all(
+        updatedFiles.map(async (f) => {
+          if (f.fileObject) {
+            const path = await uploadFAIFile(user.id, f.fileObject);
+            return { ...f, filePath: path };
+          }
+          return f;
+        })
+      );
+
+      // Prepare files for DB
+      const dbFiles = filesWithPaths.map(({ data, fileObject, ...rest }) => rest);
+
+      const updatedSubForAnalysis = { ...target, files: filesWithPaths, status: SubmissionStatus.PENDING_AI };
       
       // Update Supabase
       await supabase
         .from('fai')
         .update({ 
-          status: 'pending_ai',
-          payload: { ...target, files: updatedFiles, aiAnalysis: undefined } 
+          status: 'submitted', // Use standard DB status
+          payload: { ...target, files: dbFiles, aiAnalysis: undefined } 
         })
         .eq('id', submissionId);
 
-      await runAnalysis(submissionId, updatedSub);
+      await runAnalysis(submissionId, updatedSubForAnalysis);
     }
   };
 

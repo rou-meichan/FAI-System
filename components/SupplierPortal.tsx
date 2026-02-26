@@ -2,6 +2,7 @@ import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { DOCUMENT_CONFIG } from '../constants';
 import { DocType, FAIFile, FAISubmission, SubmissionStatus } from '../types';
 import { StatusBadge } from './IQADashboard';
+import { getSignedUrl } from '../services/supabase';
 
 interface SupplierPortalProps {
   onSubmit: (submission: FAISubmission) => void;
@@ -12,6 +13,21 @@ interface SupplierPortalProps {
 const ITEMS_PER_PAGE = 8;
 
 const FilePreviewModal: React.FC<{ file: FAIFile; onClose: () => void }> = ({ file, onClose }) => {
+  const [signedUrl, setSignedUrl] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+
+  useEffect(() => {
+    if (file.filePath && !file.data) {
+      setIsLoading(true);
+      getSignedUrl(file.filePath)
+        .then(url => setSignedUrl(url))
+        .catch(err => console.error('Error getting signed URL:', err))
+        .finally(() => setIsLoading(false));
+    }
+  }, [file]);
+
+  const previewUrl = file.data || signedUrl;
+
   return (
     <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-[200] flex items-center justify-center p-2 md:p-10 animate-in fade-in duration-300">
       <div className="bg-white w-full max-w-5xl h-full max-h-[95vh] md:max-h-[90vh] rounded-[1.5rem] md:rounded-[2.5rem] shadow-2xl flex flex-col overflow-hidden animate-in zoom-in-95 duration-300">
@@ -38,15 +54,23 @@ const FilePreviewModal: React.FC<{ file: FAIFile; onClose: () => void }> = ({ fi
         </div>
 
         <div className="flex-1 bg-slate-50 flex items-center justify-center p-2 md:p-12 overflow-auto">
-          {file.data ? (
+          {isLoading ? (
+            <div className="flex flex-col items-center gap-4">
+              <svg className="animate-spin h-8 w-8 text-indigo-600" fill="none" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+              </svg>
+              <p className="text-xs font-black text-slate-400 uppercase tracking-widest">Fetching Secure Artifact...</p>
+            </div>
+          ) : previewUrl ? (
             file.mimeType === 'application/pdf' ? (
               <iframe 
-                src={file.data} 
+                src={previewUrl} 
                 className="w-full h-full rounded-xl md:rounded-2xl shadow-inner border border-slate-200"
                 title={file.name}
               />
             ) : (
-              <img src={file.data} alt={file.name} className="max-w-full max-h-full object-contain shadow-2xl rounded-lg md:rounded-xl" />
+              <img src={previewUrl} alt={file.name} className="max-w-full max-h-full object-contain shadow-2xl rounded-lg md:rounded-xl" />
             )
           ) : (
             <div className="text-center space-y-4 max-w-sm p-6">
@@ -106,6 +130,7 @@ const SupplierPortal: React.FC<SupplierPortalProps> = ({ onSubmit, submissions, 
           mimeType: file.type || 'application/octet-stream',
           lastModified: file.lastModified,
           data: dataUrl,
+          fileObject: file, // Store original file for upload
           isMandatory: DOCUMENT_CONFIG.find(c => c.type === type)?.mandatory || false,
         };
         
@@ -127,7 +152,7 @@ const SupplierPortal: React.FC<SupplierPortalProps> = ({ onSubmit, submissions, 
     setFiles(prev => prev.filter(f => f.type !== type));
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
 
@@ -141,15 +166,18 @@ const SupplierPortal: React.FC<SupplierPortalProps> = ({ onSubmit, submissions, 
       files,
     };
 
-    setTimeout(() => {
-      onSubmit(submission);
-      setIsSubmitting(false);
+    try {
+      await onSubmit(submission);
       setPartNumber('');
       setRevision('');
       setFiles([]);
       setActiveTab('HISTORY');
       setCurrentPage(1);
-    }, 1500);
+    } catch (err) {
+      console.error('Submission failed:', err);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const getFileForType = (type: DocType) => files.find(f => f.type === type);

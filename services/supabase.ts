@@ -79,3 +79,23 @@ export const resetPassword = async (email: string) => {
     });
     if (error) throw error;
 };
+
+// Storage functions
+export const uploadFAIFile = async (userId: string, file: File) => {
+    const filePath = `${userId}/${file.name}`;
+    const { data, error } = await supabase.storage
+        .from('fai-documents')
+        .upload(filePath, file, {
+            upsert: true
+        });
+    if (error) throw error;
+    return data.path;
+};
+
+export const getSignedUrl = async (filePath: string) => {
+    const { data, error } = await supabase.storage
+        .from('fai-documents')
+        .createSignedUrl(filePath, 3600); // 1 hour
+    if (error) throw error;
+    return data.signedUrl;
+};
