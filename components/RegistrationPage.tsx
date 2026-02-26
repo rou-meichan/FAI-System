@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { signUpUser } from '../services/supabase';
 
 interface RegistrationPageProps {
   type: 'SUPPLIER' | 'EMPLOYEE';
@@ -7,27 +8,36 @@ interface RegistrationPageProps {
 }
 
 const RegistrationPage: React.FC<RegistrationPageProps> = ({ type, onBack, onSubmit }) => {
-  const [formData, setFormData] = useState({ name: '', email: '', extra: '' });
+  const [formData, setFormData] = useState({ name: '', email: '', password: '', extra: '' });
   const [isProcessing, setIsProcessing] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsProcessing(true);
+    setError(null);
     
-    // Simulate API delay
-    setTimeout(() => {
+    try {
+      const role = type === 'SUPPLIER' ? 'supplier' : 'iqa';
+      await signUpUser(formData.email, formData.password, role);
+      
       const payload = {
         name: formData.name,
         email: formData.email,
         [type === 'SUPPLIER' ? 'organization' : 'role']: formData.extra
       };
-      setIsProcessing(false);
+      
       setShowSuccess(true);
       
       // Navigate back after success animation
       setTimeout(() => onSubmit(payload), 1500);
-    }, 1000);
+    } catch (err: any) {
+      console.error('Registration error:', err);
+      setError(err.message || 'Failed to register user');
+    } finally {
+      setIsProcessing(false);
+    }
   };
 
   const extraLabel = type === 'SUPPLIER' ? 'Corporate Entity' : 'Authorized Designation';
@@ -110,6 +120,11 @@ const RegistrationPage: React.FC<RegistrationPageProps> = ({ type, onBack, onSub
 
           {/* Form Side */}
           <div className="md:col-span-3 p-8 md:p-12 bg-white">
+            {error && (
+              <div className="mb-6 p-4 bg-rose-50 border border-rose-100 rounded-2xl text-rose-600 text-xs font-bold animate-in fade-in slide-in-from-top-2">
+                {error}
+              </div>
+            )}
             <form onSubmit={handleSubmit} className="space-y-6">
               <div className="space-y-1.5">
                 <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Legal Full Name</label>
@@ -131,6 +146,18 @@ const RegistrationPage: React.FC<RegistrationPageProps> = ({ type, onBack, onSub
                   placeholder="name@organization.com"
                   value={formData.email}
                   onChange={e => setFormData(prev => ({ ...prev, email: e.target.value }))}
+                  className={`w-full px-5 py-4 bg-slate-50 border border-slate-200 rounded-2xl outline-none transition-all font-bold text-sm shadow-inner focus:ring-4 ${focusRing}`}
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Secure Password</label>
+                <input 
+                  required
+                  type="password" 
+                  placeholder="••••••••"
+                  value={formData.password}
+                  onChange={e => setFormData(prev => ({ ...prev, password: e.target.value }))}
                   className={`w-full px-5 py-4 bg-slate-50 border border-slate-200 rounded-2xl outline-none transition-all font-bold text-sm shadow-inner focus:ring-4 ${focusRing}`}
                 />
               </div>

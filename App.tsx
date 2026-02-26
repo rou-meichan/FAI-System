@@ -11,6 +11,7 @@ import EmployeeDetail from './components/EmployeeDetail';
 import RegistrationPage from './components/RegistrationPage';
 import { FAISubmission, SubmissionStatus, User, SupplierAccount, EmployeeAccount, FAIFile } from './types';
 import { analyzeFAISubmission } from './services/geminiService';
+import { supabase, fetchFAIs, insertFAI, updateFAIStatus } from './services/supabase';
 
 type ViewType = 'DASHBOARD' | 'PROFILE' | 'SUPPLIERS' | 'FAI_REQUESTS' | 'REGISTER_SUPPLIER' | 'REGISTER_EMPLOYEE';
 
@@ -25,128 +26,201 @@ const App: React.FC = () => {
   const [isManagedEditMode, setIsManagedEditMode] = useState(false);
   const [currentView, setCurrentView] = useState<ViewType>('DASHBOARD');
   const [mgmtActiveTab, setMgmtActiveTab] = useState<'SUPPLIERS' | 'EMPLOYEES'>('SUPPLIERS');
+  const [isLoading, setIsLoading] = useState(true);
+  const [showForceStart, setShowForceStart] = useState(false);
+
+  useEffect(() => {
+    const timer = setTimeout(() => setShowForceStart(true), 5000);
+    return () => clearTimeout(timer);
+  }, []);
 
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: 'auto' });
   }, [currentView, selectedSubmissionId, selectedManagedSupplierId, selectedEmployeeId]);
 
+  // Check for existing session on load
   useEffect(() => {
-    const dummySubmissions: FAISubmission[] = [
-      {
-        id: 'SUB-10025',
-        supplierName: 'ABC Manufacturing',
-        partNumber: 'MOD-441-B',
-        revision: '02',
-        timestamp: Date.now() - 3600000 * 2,
-        status: SubmissionStatus.PENDING_REVIEW,
-        files: [
-          { id: 'f1', type: 'Engineering Drawing' as any, name: 'DWG-441B.pdf', mimeType: 'application/pdf', lastModified: Date.now(), isMandatory: true },
-          { id: 'f2', type: 'FAI Report (Supplier)' as any, name: 'FAI_Report_441B.xlsx', mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', lastModified: Date.now(), isMandatory: true }
-        ],
-        aiAnalysis: {
-          overallVerdict: 'APPROVED',
-          summary: 'Critical dimensions on Engineering Drawing match FAI data points. CPK > 1.33.',
-          details: [
-            { docType: 'Engineering Drawing' as any, result: 'PASS', notes: 'Features correctly ballooned' },
-            { docType: 'FAI Report (Supplier)' as any, result: 'PASS', notes: 'All dimensions within 20% of center' }
-          ]
+    const checkUser = async () => {
+      console.log('Starting session check...');
+      
+      try {
+        // Use a more generous timeout for the initial session check
+        const sessionPromise = supabase.auth.getSession();
+        const timeoutPromise = new Promise<any>((resolve) => 
+          setTimeout(() => resolve({ data: { session: null }, error: new Error('Session check timed out') }), 8000)
+        );
+
+        const { data: { session }, error: sessionError } = await Promise.race([
+          sessionPromise,
+          timeoutPromise
+        ]);
+
+        if (sessionError) {
+          console.warn('Session check encountered an issue (possibly timeout):', sessionError.message);
         }
-      },
-      {
-        id: 'SUB-10026',
-        supplierName: 'Tech Components Ltd.',
-        partNumber: 'CPU-V1-XT',
-        revision: '01',
-        timestamp: Date.now() - 3600000 * 5,
-        status: SubmissionStatus.APPROVED,
-        iqaRemarks: 'Excellent submission. Material certification is clear and dimensions are well within tolerance limits.',
-        files: [
-           { id: 'f3', type: 'Engineering Drawing' as any, name: 'CPU-V1.pdf', mimeType: 'application/pdf', lastModified: Date.now(), isMandatory: true },
-           { id: 'f4', type: 'Material Certification & CoC' as any, name: 'MAT_CERT_001.pdf', mimeType: 'application/pdf', lastModified: Date.now(), isMandatory: true }
-        ],
-        aiAnalysis: {
-          overallVerdict: 'APPROVED',
-          summary: 'Full documentation set provided. Batch numbers match material certificate.',
-          details: [{ docType: 'Material Certification & CoC' as any, result: 'PASS', notes: 'Verified authentic' }]
+
+        if (session?.user) {
+          console.log('Session found, fetching profile...');
+          const { data: profile, error: profileError } = await Promise.race([
+            supabase.from('profiles').select('*').eq('id', session.user.id).maybeSingle(),
+            new Promise<any>((resolve) => setTimeout(() => resolve({ data: null, error: new Error('Profile fetch timed out') }), 5000))
+          ]);
+
+          if (profileError) {
+            console.warn('Profile fetch error or timeout:', profileError.message);
+          }
+
+          if (profile) {
+            setUser({
+              id: session.user.id,
+              name: session.user.user_metadata?.name || session.user.email?.split('@')[0] || 'User',
+              role: profile.role.toUpperCase() as any,
+              organization: session.user.user_metadata?.organization || (profile.role === 'supplier' ? 'Supplier Org' : 'IQA Office'),
+            });
+            console.log('User profile loaded successfully');
+          }
+        } else {
+          console.log('No active session found');
         }
-      },
-      {
-        id: 'SUB-10028',
-        supplierName: 'Tech Components Ltd.',
-        partNumber: 'PSU-750W',
-        revision: 'C',
-        timestamp: Date.now() - 86400000 * 1.5,
-        status: SubmissionStatus.REJECTED,
-        iqaRemarks: 'Missing REACH compliance document. Dimension 4.2 in the FAI report exceeds drawing tolerance by 0.05mm. Please revise and resubmit.',
-        files: [
-          { id: 'f5', type: 'Engineering Drawing' as any, name: 'PSU_DRAWING.png', mimeType: 'image/png', lastModified: Date.now(), isMandatory: true },
-          { id: 'f6', type: 'FAI Report (Supplier)' as any, name: 'DATA.xlsx', mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', lastModified: Date.now(), isMandatory: true }
-        ],
-        aiAnalysis: {
-          overallVerdict: 'REJECTED',
-          summary: 'Mandatory environmental documents missing. Potential out of spec dimension identified.',
-          details: [{ docType: 'REACH Compliance' as any, result: 'FAIL', notes: 'Artifact not found' }]
-        }
-      },
-      {
-        id: 'SUB-10029',
-        supplierName: 'ABC Manufacturing',
-        partNumber: 'BRACKET-X',
-        revision: '03',
-        timestamp: Date.now() - 86400000 * 2,
-        status: SubmissionStatus.APPROVED,
-        iqaRemarks: 'Dimensions verified. Cleanliness report meets the new ISO requirements. Approved for production.',
-        files: [],
-        aiAnalysis: {
-          overallVerdict: 'APPROVED',
-          summary: 'Simple geometry verified against master drawing.',
-          details: [{ docType: 'Engineering Drawing' as any, result: 'PASS', notes: 'Features verified' }]
-        }
-      },
-      {
-        id: 'SUB-10030',
-        supplierName: 'Tech Components Ltd.',
-        partNumber: 'SENSOR-H',
-        revision: 'A2',
-        timestamp: Date.now() - 86400000 * 3,
-        status: SubmissionStatus.PENDING_REVIEW,
-        files: [],
-        aiAnalysis: {
-          overallVerdict: 'APPROVED',
-          summary: 'Calibration data looks accurate. Suggest approval.',
-          details: [{ docType: 'FAI Report (Supplier)' as any, result: 'PASS', notes: 'Data points aligned' }]
-        }
+      } catch (err) {
+        console.error('Unexpected error during session check:', err);
+      } finally {
+        console.log('Session check complete, clearing loading state');
+        setIsLoading(false);
       }
-    ];
+    };
 
-    const dummySuppliers: SupplierAccount[] = [
-      { id: 'S1', name: 'John Supplier', organization: 'ABC Manufacturing', email: 'admin@abcmfg.com', status: 'ACTIVE', createdDate: Date.now() - 86400000 * 60 },
-      { id: 'S2', name: 'Alice Tech', organization: 'Tech Components Ltd.', email: 'alice@techcomp.com', status: 'ACTIVE', createdDate: Date.now() - 86400000 * 55 }
-    ];
+    checkUser();
+    
+    let subscription: any = null;
+    try {
+      const { data } = supabase.auth.onAuthStateChange(async (event, session) => {
+        console.log('Auth state changed:', event, session ? 'Session present' : 'No session');
+        if (event === 'SIGNED_IN' && session?.user) {
+          const { data: profile, error: profileError } = await Promise.race([
+            supabase.from('profiles').select('*').eq('id', session.user.id).maybeSingle(),
+            new Promise<any>((resolve) => setTimeout(() => resolve({ data: null, error: new Error('Profile fetch timed out') }), 5000))
+          ]);
 
-    const dummyEmployees: EmployeeAccount[] = [
-      { id: 'E1', name: 'Sarah Inspector', email: 'inspector@iqa.gov', role: 'IQA Lead', status: 'ACTIVE', createdDate: Date.now() - 86400000 * 60 }
-    ];
+          if (profileError) {
+            console.warn('Profile fetch error during auth change:', profileError.message);
+          }
 
-    setSubmissions(dummySubmissions);
-    setSuppliers(dummySuppliers);
-    setEmployees(dummyEmployees);
+          if (profile) {
+            setUser({
+              id: session.user.id,
+              name: session.user.user_metadata?.name || session.user.email?.split('@')[0] || 'User',
+              role: profile.role.toUpperCase() as any,
+              organization: session.user.user_metadata?.organization || (profile.role === 'supplier' ? 'Supplier Org' : 'IQA Office'),
+            });
+          }
+        } else if (event === 'SIGNED_OUT') {
+          setUser(null);
+        }
+      });
+      subscription = data.subscription;
+    } catch (err) {
+      console.error('Error setting up auth state change listener:', err);
+    }
+
+    return () => {
+      if (subscription) subscription.unsubscribe();
+    };
   }, []);
+
+  // Fetch data from Supabase
+  useEffect(() => {
+    if (!user) return;
+
+    const loadData = async () => {
+      try {
+        const faiRecords = await fetchFAIs();
+        if (faiRecords) {
+          const mappedSubmissions: FAISubmission[] = faiRecords.map((record: any) => ({
+            id: record.id,
+            supplierName: record.payload?.supplierName || 'Unknown',
+            partNumber: record.payload?.partNumber || 'N/A',
+            revision: record.payload?.revision || '-',
+            timestamp: new Date(record.submission_date).getTime(),
+            status: record.status === 'submitted' ? SubmissionStatus.PENDING_REVIEW : record.status.toUpperCase() as SubmissionStatus,
+            files: record.payload?.files || [],
+            iqaRemarks: record.remarks,
+            aiAnalysis: record.payload?.aiAnalysis,
+          }));
+          setSubmissions(mappedSubmissions);
+        }
+
+        // For demo purposes, we still use dummy data for suppliers/employees management
+        // In a real app, these would also come from Supabase tables
+        const dummySuppliers: SupplierAccount[] = [
+          { id: 'S1', name: 'John Supplier', organization: 'ABC Manufacturing', email: 'admin@abcmfg.com', status: 'ACTIVE', createdDate: Date.now() - 86400000 * 60 },
+          { id: 'S2', name: 'Alice Tech', organization: 'Tech Components Ltd.', email: 'alice@techcomp.com', status: 'ACTIVE', createdDate: Date.now() - 86400000 * 55 }
+        ];
+        const dummyEmployees: EmployeeAccount[] = [
+          { id: 'E1', name: 'Sarah Inspector', email: 'inspector@iqa.gov', role: 'IQA Lead', status: 'ACTIVE', createdDate: Date.now() - 86400000 * 60 }
+        ];
+        setSuppliers(dummySuppliers);
+        setEmployees(dummyEmployees);
+      } catch (err) {
+        console.error('Error loading data:', err);
+      }
+    };
+
+    loadData();
+  }, [user]);
 
   const runAnalysis = async (id: string, sub: FAISubmission) => {
     setSubmissions(prev => prev.map(s => s.id === id ? { ...s, status: SubmissionStatus.AI_REVIEWING } : s));
     try {
       const analysisResult = await analyzeFAISubmission(sub);
+      
+      // Update local state
       setSubmissions(prev => prev.map(s => s.id === id ? { ...s, status: SubmissionStatus.PENDING_REVIEW, aiAnalysis: analysisResult } : s));
+      
+      // Update Supabase
+      const target = submissions.find(s => s.id === id);
+      if (target) {
+        await supabase
+          .from('fai')
+          .update({ 
+            status: 'pending_review',
+            payload: { ...target.payload, aiAnalysis: analysisResult } 
+          })
+          .eq('id', id);
+      }
     } catch (err) {
       setSubmissions(prev => prev.map(s => s.id === id ? { ...s, status: SubmissionStatus.REJECTED, iqaRemarks: 'System processing error during AI audit.' } : s));
     }
   };
 
   const handleNewSubmission = async (newSubmission: FAISubmission) => {
-    const submissionWithOrg = { ...newSubmission, supplierName: user?.organization || 'Unknown Entity' };
-    setSubmissions(prev => [submissionWithOrg, ...prev]);
-    await runAnalysis(submissionWithOrg.id, submissionWithOrg);
+    if (!user) return;
+
+    try {
+      const submissionWithOrg = { ...newSubmission, supplierName: user.organization };
+      
+      // Save to Supabase
+      const record = {
+        supplier_id: user.id,
+        title: `${submissionWithOrg.partNumber} Rev ${submissionWithOrg.revision}`,
+        status: 'pending_ai',
+        payload: {
+          supplierName: submissionWithOrg.supplierName,
+          partNumber: submissionWithOrg.partNumber,
+          revision: submissionWithOrg.revision,
+          files: submissionWithOrg.files
+        }
+      };
+      
+      const saved = await insertFAI(record);
+      if (saved && saved[0]) {
+        const finalSub = { ...submissionWithOrg, id: saved[0].id };
+        setSubmissions(prev => [finalSub, ...prev]);
+        await runAnalysis(finalSub.id, finalSub);
+      }
+    } catch (err) {
+      console.error('Error saving submission:', err);
+    }
   };
 
   const handleUpdateSubmission = async (submissionId: string, updatedFiles: FAIFile[]) => {
@@ -154,11 +228,22 @@ const App: React.FC = () => {
     const target = submissions.find(s => s.id === submissionId);
     if (target) {
       const updatedSub = { ...target, files: updatedFiles, status: SubmissionStatus.PENDING_AI };
+      
+      // Update Supabase
+      await supabase
+        .from('fai')
+        .update({ 
+          status: 'pending_ai',
+          payload: { ...target, files: updatedFiles, aiAnalysis: undefined } 
+        })
+        .eq('id', submissionId);
+
       await runAnalysis(submissionId, updatedSub);
     }
   };
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
     setUser(null);
     setSelectedSubmissionId(null);
     setSelectedManagedSupplierId(null);
@@ -166,6 +251,25 @@ const App: React.FC = () => {
     setIsManagedEditMode(false);
     setCurrentView('DASHBOARD');
   };
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+        <div className="flex flex-col items-center gap-4">
+          <div className="w-12 h-12 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
+          <p className="text-slate-500 font-bold uppercase tracking-widest text-[10px]">Synchronizing Vault...</p>
+          {showForceStart && (
+            <button 
+              onClick={() => setIsLoading(false)}
+              className="mt-4 px-4 py-2 bg-white border border-slate-200 rounded-lg text-[10px] font-bold text-slate-400 hover:text-slate-600 transition-all animate-in fade-in slide-in-from-bottom-2"
+            >
+              Skip Synchronization
+            </button>
+          )}
+        </div>
+      </div>
+    );
+  }
 
   if (!user) return <LoginPage onLogin={setUser} />;
 
@@ -189,8 +293,14 @@ const App: React.FC = () => {
           submission={selectedSub} 
           userRole={user.role}
           onClose={() => setSelectedSubmissionId(null)} 
-          onDecision={(decision, remarks) => {
-            setSubmissions(prev => prev.map(s => s.id === selectedSub.id ? { ...s, status: decision === 'APPROVED' ? SubmissionStatus.APPROVED : SubmissionStatus.REJECTED, iqaRemarks: remarks, isNewVerdict: true } : s));
+          onDecision={async (decision, remarks) => {
+            try {
+              const status = decision === 'APPROVED' ? 'approved' : 'rejected';
+              await updateFAIStatus(selectedSub.id, status, remarks);
+              setSubmissions(prev => prev.map(s => s.id === selectedSub.id ? { ...s, status: decision === 'APPROVED' ? SubmissionStatus.APPROVED : SubmissionStatus.REJECTED, iqaRemarks: remarks, isNewVerdict: true } : s));
+            } catch (err) {
+              console.error('Error updating status:', err);
+            }
           }}
           onUpdateSubmission={handleUpdateSubmission}
         />
