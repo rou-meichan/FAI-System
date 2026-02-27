@@ -1,40 +1,22 @@
+/// <reference types="vite/client" />
+// Importing necessary packages
 import { createClient } from '@supabase/supabase-js';
 
-const supabaseUrl = (import.meta as any).env.VITE_SUPABASE_URL || '';
-const supabaseAnonKey = (import.meta as any).env.VITE_SUPABASE_ANON_KEY || '';
-
-console.log('Initializing Supabase with URL:', supabaseUrl ? `${supabaseUrl.substring(0, 15)}...` : 'MISSING');
-
-if (!supabaseUrl || !supabaseAnonKey) {
-    console.warn('Supabase credentials missing. Please set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in your environment.');
-}
-
+// Creating the Supabase client
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || '';
+const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
 export const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
 // Function for signing up a user
-export const signUpUser = async (email: string, password: string, role: 'supplier' | 'iqa' = 'supplier') => {
-    console.log('Attempting signup for:', email);
-    const { data, error } = await Promise.race([
-        supabase.auth.signUp({ 
-            email, 
-            password,
-            options: {
-                data: { role }
-            }
-        }),
-        new Promise<any>((_, reject) => setTimeout(() => reject(new Error('Signup request timed out')), 10000))
-    ]);
+export const signUpUser = async (email: string, password: string) => {
+    const { data, error } = await supabase.auth.signUp({ email, password });
     if (error) throw error;
-    return data;
+    return data.user;
 };
 
 // Function for logging in a user
 export const loginUser = async (email: string, password: string) => {
-    console.log('Attempting login for:', email);
-    const { data, error } = await Promise.race([
-        supabase.auth.signInWithPassword({ email, password }),
-        new Promise<any>((_, reject) => setTimeout(() => reject(new Error('Login request timed out')), 10000))
-    ]);
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) throw error;
     return data.user;
 };
@@ -49,53 +31,11 @@ export const insertFAI = async (faiData: any) => {
     return data;
 };
 
-// Function to fetch FAIs
+// Function to fetch FAIs with RLS policies
 export const fetchFAIs = async () => {
-    console.log('Fetching FAIs...');
-    const { data, error } = await Promise.race([
-        supabase
-            .from('fai')
-            .select('*')
-            .order('submission_date', { ascending: false }),
-        new Promise<any>((_, reject) => setTimeout(() => reject(new Error('Fetch FAIs timed out')), 10000))
-    ]);
-    if (error) throw error;
-    return data;
-};
-
-export const updateFAIStatus = async (id: string, status: string, remarks: string) => {
     const { data, error } = await supabase
         .from('fai')
-        .update({ status, remarks })
-        .eq('id', id)
-        .select();
+        .select('*');
     if (error) throw error;
     return data;
-};
-
-export const resetPassword = async (email: string) => {
-    const { error } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: `${window.location.origin}/reset-password`,
-    });
-    if (error) throw error;
-};
-
-// Storage functions
-export const uploadFAIFile = async (userId: string, file: File) => {
-    const filePath = `${userId}/${file.name}`;
-    const { data, error } = await supabase.storage
-        .from('fai-documents')
-        .upload(filePath, file, {
-            upsert: true
-        });
-    if (error) throw error;
-    return data.path;
-};
-
-export const getSignedUrl = async (filePath: string) => {
-    const { data, error } = await supabase.storage
-        .from('fai-documents')
-        .createSignedUrl(filePath, 3600); // 1 hour
-    if (error) throw error;
-    return data.signedUrl;
 };

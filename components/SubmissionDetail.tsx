@@ -2,7 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { FAISubmission, SubmissionStatus, UserRole, FAIFile, DocType } from '../types';
 import { StatusBadge } from './IQADashboard';
 import { DOCUMENT_CONFIG } from '../constants';
-import { getSignedUrl } from '../services/supabase';
+import PDFPreview from './PDFPreview';
+import { base64ToBlob } from '../src/utils/fileUtils';
 
 interface SubmissionDetailProps {
   submission: FAISubmission;
@@ -13,21 +14,6 @@ interface SubmissionDetailProps {
 }
 
 const FilePreviewModal: React.FC<{ file: FAIFile; onClose: () => void }> = ({ file, onClose }) => {
-  const [signedUrl, setSignedUrl] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
-
-  useEffect(() => {
-    if (file.filePath && !file.data) {
-      setIsLoading(true);
-      getSignedUrl(file.filePath)
-        .then(url => setSignedUrl(url))
-        .catch(err => console.error('Error getting signed URL:', err))
-        .finally(() => setIsLoading(false));
-    }
-  }, [file]);
-
-  const previewUrl = file.data || signedUrl;
-
   return (
     <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-[200] flex items-center justify-center p-2 md:p-10 animate-in fade-in duration-300">
       <div className="bg-white w-full max-w-5xl h-full max-h-[95vh] md:max-h-[90vh] rounded-[1.5rem] md:rounded-[2rem] shadow-2xl flex flex-col overflow-hidden animate-in zoom-in-95 duration-300 border border-slate-200">
@@ -54,23 +40,15 @@ const FilePreviewModal: React.FC<{ file: FAIFile; onClose: () => void }> = ({ fi
         </div>
 
         <div className="flex-1 bg-slate-50 flex items-center justify-center p-2 md:p-4 overflow-auto">
-          {isLoading ? (
-            <div className="flex flex-col items-center gap-4">
-              <svg className="animate-spin h-8 w-8 text-indigo-600" fill="none" viewBox="0 0 24 24">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-              </svg>
-              <p className="text-xs font-black text-slate-400 uppercase tracking-widest">Fetching Secure Artifact...</p>
-            </div>
-          ) : previewUrl ? (
+          {file.data ? (
             file.mimeType === 'application/pdf' ? (
-              <iframe 
-                src={previewUrl} 
-                className="w-full h-full rounded-lg md:rounded-xl shadow-inner border border-slate-200 bg-white"
+              <PDFPreview 
+                data={file.data} 
                 title={file.name}
+                className="w-full h-full rounded-lg md:rounded-xl shadow-inner border border-slate-200 bg-white"
               />
             ) : (
-              <img src={previewUrl} alt={file.name} className="max-w-full max-h-full object-contain shadow-xl rounded-lg md:rounded-xl" />
+              <img src={file.data} alt={file.name} className="max-w-full max-h-full object-contain shadow-xl rounded-lg md:rounded-xl" />
             )
           ) : (
             <div className="text-center p-10 bg-white rounded-3xl border border-slate-200 mx-4">
@@ -113,6 +91,20 @@ const SubmissionDetail: React.FC<SubmissionDetailProps> = ({
     day: 'numeric',
   });
 
+  const handlePreview = (file: FAIFile) => {
+    if (file.mimeType === 'application/pdf') {
+      try {
+        const blob = base64ToBlob(file.data!, 'application/pdf');
+        const url = URL.createObjectURL(blob);
+        window.open(url, '_blank');
+      } catch (error) {
+        console.error('Failed to open PDF:', error);
+      }
+    } else {
+      setPreviewingFile(file);
+    }
+  };
+
   const normalize = (str: string) => str.toLowerCase().replace(/[^a-z0-9]/g, '');
   
   const findMatchingFile = (docTypeStr: string) => {
@@ -142,7 +134,6 @@ const SubmissionDetail: React.FC<SubmissionDetailProps> = ({
           mimeType: file.type || 'application/octet-stream',
           lastModified: file.lastModified,
           data: dataUrl,
-          fileObject: file, // Store original file for upload
           isMandatory: DOCUMENT_CONFIG.find(c => c.type === type)?.mandatory || false,
         };
         
@@ -233,7 +224,7 @@ const SubmissionDetail: React.FC<SubmissionDetailProps> = ({
               >
                 <div className="flex items-center gap-3 min-w-0 flex-1">
                   <div 
-                    onClick={() => file && setPreviewingFile(file)}
+                    onClick={() => file && handlePreview(file)}
                     className={`p-2 rounded-lg transition-all shrink-0 ${
                       file 
                         ? 'bg-white text-slate-400 cursor-pointer hover:bg-indigo-600 hover:text-white shadow-sm' 

@@ -456,7 +456,7 @@ const IQADashboard: React.FC<IQADashboardProps> = ({ submissions, onViewDetail, 
 };
 
 export const StatusBadge: React.FC<{ status: SubmissionStatus }> = ({ status }) => {
-  const configs: Partial<Record<SubmissionStatus, { label: string; class: string }>> = {
+  const configs: Record<SubmissionStatus, { label: string; class: string }> = {
     [SubmissionStatus.DRAFT]: { label: 'Draft', class: 'bg-slate-100 text-slate-600' },
     [SubmissionStatus.PENDING_AI]: { label: 'AI Queue', class: 'bg-slate-50 text-slate-400' },
     [SubmissionStatus.AI_REVIEWING]: { label: 'AI Processing', class: 'bg-indigo-50 text-indigo-600 animate-pulse' },
@@ -465,7 +465,7 @@ export const StatusBadge: React.FC<{ status: SubmissionStatus }> = ({ status }) 
     [SubmissionStatus.REJECTED]: { label: 'Rejected', class: 'bg-rose-100 text-rose-700' },
   };
 
-  const config = configs[status] || { label: status, class: 'bg-slate-100 text-slate-400' };
+  const config = configs[status];
   return (
     <span className={`inline-flex items-center justify-center px-2 py-0.5 md:px-2.5 md:py-1 rounded-full text-[8px] md:text-[10px] font-black uppercase tracking-widest whitespace-nowrap ${config.class}`}>
       {config.label}

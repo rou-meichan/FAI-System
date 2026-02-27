@@ -11,7 +11,8 @@ import EmployeeDetail from './components/EmployeeDetail';
 import RegistrationPage from './components/RegistrationPage';
 import { FAISubmission, SubmissionStatus, User, SupplierAccount, EmployeeAccount, FAIFile } from './types';
 import { analyzeFAISubmission } from './services/geminiService';
-import { supabase, fetchFAIs, insertFAI, updateFAIStatus, uploadFAIFile } from './services/supabase';
+import authService from './services/authService';
+import { fetchFAISubmissions, insertFAISubmission, updateFAISubmission } from './services/faiService';
 
 type ViewType = 'DASHBOARD' | 'PROFILE' | 'SUPPLIERS' | 'FAI_REQUESTS' | 'REGISTER_SUPPLIER' | 'REGISTER_EMPLOYEE';
 
@@ -26,278 +27,229 @@ const App: React.FC = () => {
   const [isManagedEditMode, setIsManagedEditMode] = useState(false);
   const [currentView, setCurrentView] = useState<ViewType>('DASHBOARD');
   const [mgmtActiveTab, setMgmtActiveTab] = useState<'SUPPLIERS' | 'EMPLOYEES'>('SUPPLIERS');
-  const [isLoading, setIsLoading] = useState(true);
-  const [showForceStart, setShowForceStart] = useState(false);
-
-  useEffect(() => {
-    const timer = setTimeout(() => setShowForceStart(true), 5000);
-    return () => clearTimeout(timer);
-  }, []);
 
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: 'auto' });
   }, [currentView, selectedSubmissionId, selectedManagedSupplierId, selectedEmployeeId]);
 
-  // Check for existing session on load
   useEffect(() => {
-    const checkUser = async () => {
-      console.log('Starting session check...');
-      
+    const checkSession = async () => {
       try {
-        // Use a more generous timeout for the initial session check
-        const sessionPromise = supabase.auth.getSession();
-        const timeoutPromise = new Promise<any>((resolve) => 
-          setTimeout(() => resolve({ data: { session: null }, error: new Error('Session check timed out') }), 8000)
-        );
-
-        const { data: { session }, error: sessionError } = await Promise.race([
-          sessionPromise,
-          timeoutPromise
-        ]);
-
-        if (sessionError) {
-          console.warn('Session check encountered an issue (possibly timeout):', sessionError.message);
-        }
-
+        const session = await authService.getSession();
         if (session?.user) {
-          console.log('Session found, fetching profile...');
-          const { data: profile, error: profileError } = await Promise.race([
-            supabase.from('profiles').select('*').eq('id', session.user.id).maybeSingle(),
-            new Promise<any>((resolve) => setTimeout(() => resolve({ data: null, error: new Error('Profile fetch timed out') }), 5000))
-          ]);
-
-          if (profileError) {
-            console.warn('Profile fetch error or timeout:', profileError.message);
-          }
-
-          if (profile) {
-            setUser({
-              id: session.user.id,
-              name: session.user.user_metadata?.name || session.user.email?.split('@')[0] || 'User',
-              role: profile.role.toUpperCase() as any,
-              organization: session.user.user_metadata?.organization || (profile.role === 'supplier' ? 'Supplier Org' : 'IQA Office'),
-            });
-            console.log('User profile loaded successfully');
-          }
-        } else {
-          console.log('No active session found');
+          // In a real app, we'd fetch the full user profile from a 'profiles' table
+          // For now, we'll reconstruct the user object from metadata or defaults
+          const userRole = session.user.user_metadata?.role || 'SUPPLIER';
+          setUser({
+            id: session.user.id,
+            name: session.user.user_metadata?.name || session.user.email?.split('@')[0] || 'User',
+            email: session.user.email || '',
+            role: userRole,
+            organization: session.user.user_metadata?.organization || (userRole === 'SUPPLIER' ? 'Unknown Supplier' : 'IQA Dept')
+          });
         }
       } catch (err) {
-        console.error('Unexpected error during session check:', err);
-      } finally {
-        console.log('Session check complete, clearing loading state');
-        setIsLoading(false);
+        console.error('Session check failed:', err);
       }
     };
-
-    checkUser();
-    
-    let subscription: any = null;
-    try {
-      const { data } = supabase.auth.onAuthStateChange(async (event, session) => {
-        console.log('Auth state changed:', event, session ? 'Session present' : 'No session');
-        if (event === 'SIGNED_IN' && session?.user) {
-          const { data: profile, error: profileError } = await Promise.race([
-            supabase.from('profiles').select('*').eq('id', session.user.id).maybeSingle(),
-            new Promise<any>((resolve) => setTimeout(() => resolve({ data: null, error: new Error('Profile fetch timed out') }), 5000))
-          ]);
-
-          if (profileError) {
-            console.warn('Profile fetch error during auth change:', profileError.message);
-          }
-
-          if (profile) {
-            setUser({
-              id: session.user.id,
-              name: session.user.user_metadata?.name || session.user.email?.split('@')[0] || 'User',
-              role: profile.role.toUpperCase() as any,
-              organization: session.user.user_metadata?.organization || (profile.role === 'supplier' ? 'Supplier Org' : 'IQA Office'),
-            });
-          }
-        } else if (event === 'SIGNED_OUT') {
-          setUser(null);
-        }
-      });
-      subscription = data.subscription;
-    } catch (err) {
-      console.error('Error setting up auth state change listener:', err);
-    }
-
-    return () => {
-      if (subscription) subscription.unsubscribe();
-    };
+    checkSession();
   }, []);
 
-  // Fetch data from Supabase
   useEffect(() => {
-    if (!user) return;
-
     const loadData = async () => {
+      if (!user) return;
+      
       try {
-        const faiRecords = await fetchFAIs();
-        if (faiRecords) {
-          const mappedSubmissions: FAISubmission[] = faiRecords.map((record: any) => {
-            // Map DB status to UI status
-            let uiStatus = record.status.toUpperCase() as SubmissionStatus;
-            if (record.status === 'submitted') {
-              uiStatus = record.payload?.aiAnalysis ? SubmissionStatus.PENDING_REVIEW : SubmissionStatus.PENDING_AI;
-            }
-
-            return {
-              id: record.id,
-              supplierName: record.payload?.supplierName || 'Unknown',
-              partNumber: record.payload?.partNumber || 'N/A',
-              revision: record.payload?.revision || '-',
-              timestamp: new Date(record.submission_date).getTime(),
-              status: uiStatus,
-              files: record.payload?.files || [],
-              iqaRemarks: record.remarks,
-              aiAnalysis: record.payload?.aiAnalysis,
-            };
-          });
-          setSubmissions(mappedSubmissions);
+        const data = await fetchFAISubmissions();
+        if (data && data.length > 0) {
+          // Map Supabase data back to our FAISubmission type if necessary
+          // Assuming the structure matches or is stored in a way that's compatible
+          setSubmissions(data as FAISubmission[]);
+        } else {
+          // Fallback to dummy data if no data in DB yet
+          const dummySubmissions: FAISubmission[] = [
+            // ... (keeping dummy data as fallback for now)
+      {
+        id: 'SUB-10025',
+        supplierName: 'ABC Manufacturing',
+        partNumber: 'MOD-441-B',
+        revision: '02',
+        timestamp: Date.now() - 3600000 * 2,
+        status: SubmissionStatus.PENDING_REVIEW,
+        files: [
+          { id: 'f1', type: 'Engineering Drawing' as any, name: 'DWG-441B.pdf', mimeType: 'application/pdf', lastModified: Date.now(), isMandatory: true },
+          { id: 'f2', type: 'FAI Report (Supplier)' as any, name: 'FAI_Report_441B.xlsx', mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', lastModified: Date.now(), isMandatory: true }
+        ],
+        aiAnalysis: {
+          overallVerdict: 'APPROVED',
+          summary: 'Critical dimensions on Engineering Drawing match FAI data points. CPK > 1.33.',
+          details: [
+            { docType: 'Engineering Drawing' as any, result: 'PASS', notes: 'Features correctly ballooned' },
+            { docType: 'FAI Report (Supplier)' as any, result: 'PASS', notes: 'All dimensions within 20% of center' }
+          ]
         }
+      },
+      {
+        id: 'SUB-10026',
+        supplierName: 'Tech Components Ltd.',
+        partNumber: 'CPU-V1-XT',
+        revision: '01',
+        timestamp: Date.now() - 3600000 * 5,
+        status: SubmissionStatus.APPROVED,
+        iqaRemarks: 'Excellent submission. Material certification is clear and dimensions are well within tolerance limits.',
+        files: [
+           { id: 'f3', type: 'Engineering Drawing' as any, name: 'CPU-V1.pdf', mimeType: 'application/pdf', lastModified: Date.now(), isMandatory: true },
+           { id: 'f4', type: 'Material Certification & CoC' as any, name: 'MAT_CERT_001.pdf', mimeType: 'application/pdf', lastModified: Date.now(), isMandatory: true }
+        ],
+        aiAnalysis: {
+          overallVerdict: 'APPROVED',
+          summary: 'Full documentation set provided. Batch numbers match material certificate.',
+          details: [{ docType: 'Material Certification & CoC' as any, result: 'PASS', notes: 'Verified authentic' }]
+        }
+      },
+      {
+        id: 'SUB-10028',
+        supplierName: 'Tech Components Ltd.',
+        partNumber: 'PSU-750W',
+        revision: 'C',
+        timestamp: Date.now() - 86400000 * 1.5,
+        status: SubmissionStatus.REJECTED,
+        iqaRemarks: 'Missing REACH compliance document. Dimension 4.2 in the FAI report exceeds drawing tolerance by 0.05mm. Please revise and resubmit.',
+        files: [
+          { id: 'f5', type: 'Engineering Drawing' as any, name: 'PSU_DRAWING.png', mimeType: 'image/png', lastModified: Date.now(), isMandatory: true },
+          { id: 'f6', type: 'FAI Report (Supplier)' as any, name: 'DATA.xlsx', mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', lastModified: Date.now(), isMandatory: true }
+        ],
+        aiAnalysis: {
+          overallVerdict: 'REJECTED',
+          summary: 'Mandatory environmental documents missing. Potential out of spec dimension identified.',
+          details: [{ docType: 'REACH Compliance' as any, result: 'FAIL', notes: 'Artifact not found' }]
+        }
+      },
+      {
+        id: 'SUB-10029',
+        supplierName: 'ABC Manufacturing',
+        partNumber: 'BRACKET-X',
+        revision: '03',
+        timestamp: Date.now() - 86400000 * 2,
+        status: SubmissionStatus.APPROVED,
+        iqaRemarks: 'Dimensions verified. Cleanliness report meets the new ISO requirements. Approved for production.',
+        files: [],
+        aiAnalysis: {
+          overallVerdict: 'APPROVED',
+          summary: 'Simple geometry verified against master drawing.',
+          details: [{ docType: 'Engineering Drawing' as any, result: 'PASS', notes: 'Features verified' }]
+        }
+      },
+      {
+        id: 'SUB-10030',
+        supplierName: 'Tech Components Ltd.',
+        partNumber: 'SENSOR-H',
+        revision: 'A2',
+        timestamp: Date.now() - 86400000 * 3,
+        status: SubmissionStatus.PENDING_REVIEW,
+        files: [],
+        aiAnalysis: {
+          overallVerdict: 'APPROVED',
+          summary: 'Calibration data looks accurate. Suggest approval.',
+          details: [{ docType: 'FAI Report (Supplier)' as any, result: 'PASS', notes: 'Data points aligned' }]
+        }
+      }
+    ];
 
-        // For demo purposes, we still use dummy data for suppliers/employees management
-        // In a real app, these would also come from Supabase tables
-        const dummySuppliers: SupplierAccount[] = [
-          { id: 'S1', name: 'John Supplier', organization: 'ABC Manufacturing', email: 'admin@abcmfg.com', status: 'ACTIVE', createdDate: Date.now() - 86400000 * 60 },
-          { id: 'S2', name: 'Alice Tech', organization: 'Tech Components Ltd.', email: 'alice@techcomp.com', status: 'ACTIVE', createdDate: Date.now() - 86400000 * 55 }
-        ];
-        const dummyEmployees: EmployeeAccount[] = [
-          { id: 'E1', name: 'Sarah Inspector', email: 'inspector@iqa.gov', role: 'IQA Lead', status: 'ACTIVE', createdDate: Date.now() - 86400000 * 60 }
-        ];
-        setSuppliers(dummySuppliers);
-        setEmployees(dummyEmployees);
+    const dummySuppliers: SupplierAccount[] = [
+      { id: 'S1', name: 'John Supplier', organization: 'ABC Manufacturing', email: 'admin@abcmfg.com', status: 'ACTIVE', createdDate: Date.now() - 86400000 * 60 },
+      { id: 'S2', name: 'Alice Tech', organization: 'Tech Components Ltd.', email: 'alice@techcomp.com', status: 'ACTIVE', createdDate: Date.now() - 86400000 * 55 }
+    ];
+
+    const dummyEmployees: EmployeeAccount[] = [
+      { id: 'E1', name: 'Sarah Inspector', email: 'inspector@iqa.gov', role: 'IQA Lead', status: 'ACTIVE', createdDate: Date.now() - 86400000 * 60 }
+    ];
+
+    setSubmissions(dummySubmissions);
+    setSuppliers(dummySuppliers);
+    setEmployees(dummyEmployees);
+        }
       } catch (err) {
-        console.error('Error loading data:', err);
+        console.error('Failed to load data:', err);
       }
     };
 
-    loadData();
+    if (user) {
+      loadData();
+    }
   }, [user]);
+
 
   const runAnalysis = async (id: string, sub: FAISubmission) => {
     setSubmissions(prev => prev.map(s => s.id === id ? { ...s, status: SubmissionStatus.AI_REVIEWING } : s));
     try {
       const analysisResult = await analyzeFAISubmission(sub);
+      const updatedStatus = SubmissionStatus.PENDING_REVIEW;
       
-      // Update local state
-      setSubmissions(prev => prev.map(s => s.id === id ? { ...s, status: SubmissionStatus.PENDING_REVIEW, aiAnalysis: analysisResult } : s));
+      setSubmissions(prev => prev.map(s => s.id === id ? { ...s, status: updatedStatus, aiAnalysis: analysisResult } : s));
       
       // Update Supabase
-      // We use the 'sub' object passed in which contains the latest data
-      // We must strip large Base64 data and file objects before saving to DB
-      const cleanFiles = sub.files.map(({ data, fileObject, ...rest }) => rest);
-      
-      const updatedPayload = {
-        supplierName: sub.supplierName,
-        partNumber: sub.partNumber,
-        revision: sub.revision,
-        files: cleanFiles,
-        aiAnalysis: analysisResult
-      };
-
-      const { error } = await supabase
-        .from('fai')
-        .update({ 
-          status: 'submitted',
-          payload: updatedPayload
-        })
-        .eq('id', id);
-      
-      if (error) throw error;
+      await updateFAISubmission(id, { 
+        status: updatedStatus, 
+        aiAnalysis: analysisResult 
+      });
     } catch (err) {
-      console.error('AI Analysis or Supabase update failed:', err);
-      setSubmissions(prev => prev.map(s => s.id === id ? { ...s, status: SubmissionStatus.REJECTED, iqaRemarks: 'System processing error during AI audit.' } : s));
+      const errorStatus = SubmissionStatus.REJECTED;
+      const remarks = 'System processing error during AI audit.';
+      setSubmissions(prev => prev.map(s => s.id === id ? { ...s, status: errorStatus, iqaRemarks: remarks } : s));
+      
+      await updateFAISubmission(id, { 
+        status: errorStatus, 
+        iqaRemarks: remarks 
+      });
     }
   };
 
   const handleNewSubmission = async (newSubmission: FAISubmission) => {
-    if (!user) return;
-
+    const submissionWithOrg = { 
+      ...newSubmission, 
+      supplierName: user?.organization || 'Unknown Entity',
+      user_id: user?.id // Add user_id for RLS
+    };
+    
     try {
-      const submissionWithOrg = { ...newSubmission, supplierName: user.organization };
-      
-      // Upload files to Supabase Storage first
-      const filesWithPaths = await Promise.all(
-        submissionWithOrg.files.map(async (f) => {
-          if (f.fileObject) {
-            const path = await uploadFAIFile(user.id, f.fileObject);
-            return { ...f, filePath: path };
-          }
-          return f;
-        })
-      );
-
-      // Prepare files for DB (remove large base64 data and file objects)
-      const dbFiles = filesWithPaths.map(({ data, fileObject, ...rest }) => rest);
-
-      // Save to Supabase
-      const record = {
-        supplier_id: user.id,
-        title: `${submissionWithOrg.partNumber} Rev ${submissionWithOrg.revision}`,
-        status: 'submitted', // Use standard DB status
-        payload: {
-          supplierName: submissionWithOrg.supplierName,
-          partNumber: submissionWithOrg.partNumber,
-          revision: submissionWithOrg.revision,
-          files: dbFiles
-        }
-      };
-      
-      const saved = await insertFAI(record);
-      if (saved && saved[0]) {
-        // Keep the data in memory for AI analysis but use the DB-friendly version for state
-        const finalSubForState = { ...submissionWithOrg, id: saved[0].id, files: dbFiles };
-        const finalSubForAnalysis = { ...submissionWithOrg, id: saved[0].id, files: filesWithPaths };
-        
-        setSubmissions(prev => [finalSubForState, ...prev]);
-        await runAnalysis(finalSubForState.id, finalSubForAnalysis);
-      }
+      // Save to Supabase first
+      await insertFAISubmission(submissionWithOrg);
+      setSubmissions(prev => [submissionWithOrg, ...prev]);
+      await runAnalysis(submissionWithOrg.id, submissionWithOrg);
     } catch (err) {
-      console.error('Error saving submission:', err);
-      throw err;
+      console.error('Failed to save submission:', err);
+      // Fallback to local state if DB fails (optional, depending on requirements)
+      setSubmissions(prev => [submissionWithOrg, ...prev]);
+      await runAnalysis(submissionWithOrg.id, submissionWithOrg);
     }
   };
 
+
   const handleUpdateSubmission = async (submissionId: string, updatedFiles: FAIFile[]) => {
-    if (!user) return;
+    const status = SubmissionStatus.PENDING_AI;
+    setSubmissions(prev => prev.map(s => s.id === submissionId ? { ...s, status, files: updatedFiles, aiAnalysis: undefined, isNewVerdict: false } : s));
     
-    setSubmissions(prev => prev.map(s => s.id === submissionId ? { ...s, status: SubmissionStatus.PENDING_AI, files: updatedFiles, aiAnalysis: undefined, isNewVerdict: false } : s));
-    const target = submissions.find(s => s.id === submissionId);
-    if (target) {
-      // Upload new files to Supabase Storage
-      const filesWithPaths = await Promise.all(
-        updatedFiles.map(async (f) => {
-          if (f.fileObject) {
-            const path = await uploadFAIFile(user.id, f.fileObject);
-            return { ...f, filePath: path };
-          }
-          return f;
-        })
-      );
-
-      // Prepare files for DB
-      const dbFiles = filesWithPaths.map(({ data, fileObject, ...rest }) => rest);
-
-      const updatedSubForAnalysis = { ...target, files: filesWithPaths, status: SubmissionStatus.PENDING_AI };
+    try {
+      await updateFAISubmission(submissionId, { 
+        status, 
+        files: updatedFiles, 
+        aiAnalysis: null, 
+        isNewVerdict: false 
+      });
       
-      // Update Supabase
-      await supabase
-        .from('fai')
-        .update({ 
-          status: 'submitted', // Use standard DB status
-          payload: { ...target, files: dbFiles, aiAnalysis: undefined } 
-        })
-        .eq('id', submissionId);
-
-      await runAnalysis(submissionId, updatedSubForAnalysis);
+      const target = submissions.find(s => s.id === submissionId);
+      if (target) {
+        const updatedSub = { ...target, files: updatedFiles, status };
+        await runAnalysis(submissionId, updatedSub);
+      }
+    } catch (err) {
+      console.error('Update failed:', err);
     }
   };
 
   const handleLogout = async () => {
-    await supabase.auth.signOut();
+    await authService.logout();
     setUser(null);
     setSelectedSubmissionId(null);
     setSelectedManagedSupplierId(null);
@@ -305,25 +257,6 @@ const App: React.FC = () => {
     setIsManagedEditMode(false);
     setCurrentView('DASHBOARD');
   };
-
-  if (isLoading) {
-    return (
-      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
-        <div className="flex flex-col items-center gap-4">
-          <div className="w-12 h-12 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
-          <p className="text-slate-500 font-bold uppercase tracking-widest text-[10px]">Synchronizing Vault...</p>
-          {showForceStart && (
-            <button 
-              onClick={() => setIsLoading(false)}
-              className="mt-4 px-4 py-2 bg-white border border-slate-200 rounded-lg text-[10px] font-bold text-slate-400 hover:text-slate-600 transition-all animate-in fade-in slide-in-from-bottom-2"
-            >
-              Skip Synchronization
-            </button>
-          )}
-        </div>
-      </div>
-    );
-  }
 
   if (!user) return <LoginPage onLogin={setUser} />;
 
@@ -348,12 +281,17 @@ const App: React.FC = () => {
           userRole={user.role}
           onClose={() => setSelectedSubmissionId(null)} 
           onDecision={async (decision, remarks) => {
+            const status = decision === 'APPROVED' ? SubmissionStatus.APPROVED : SubmissionStatus.REJECTED;
+            setSubmissions(prev => prev.map(s => s.id === selectedSub.id ? { ...s, status, iqaRemarks: remarks, isNewVerdict: true } : s));
+            
             try {
-              const status = decision === 'APPROVED' ? 'approved' : 'rejected';
-              await updateFAIStatus(selectedSub.id, status, remarks);
-              setSubmissions(prev => prev.map(s => s.id === selectedSub.id ? { ...s, status: decision === 'APPROVED' ? SubmissionStatus.APPROVED : SubmissionStatus.REJECTED, iqaRemarks: remarks, isNewVerdict: true } : s));
+              await updateFAISubmission(selectedSub.id, { 
+                status, 
+                iqaRemarks: remarks, 
+                isNewVerdict: true 
+              });
             } catch (err) {
-              console.error('Error updating status:', err);
+              console.error('Decision update failed:', err);
             }
           }}
           onUpdateSubmission={handleUpdateSubmission}

@@ -27,8 +27,6 @@ export interface FAIFile {
   mimeType: string;
   lastModified: number;
   data?: string; // Base64 with or without data URL prefix
-  filePath?: string; // Supabase Storage path: ${userId}/${fileName}
-  fileObject?: File; // Original File object for uploading
   isMandatory: boolean;
 }
 

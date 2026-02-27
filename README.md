@@ -18,9 +18,3 @@ View your app in AI Studio: https://ai.studio/apps/5ed10535-f57d-4002-a7bc-c2d4f
 2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
 3. Run the app:
    `npm run dev`
-
-
-**Problem:**
-1. After integrate storage using bucket, the AI analysis cannot work
-2. The AI analysis cannot analyse pdf file ?? / The system does not accept pdf file ??
-
