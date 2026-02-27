@@ -217,8 +217,8 @@ const App: React.FC = () => {
       await insertFAISubmission(submissionWithOrg);
       setSubmissions(prev => [submissionWithOrg, ...prev]);
       await runAnalysis(submissionWithOrg.id, submissionWithOrg);
-    } catch (err) {
-      console.error('Failed to save submission:', err);
+    } catch (err: any) {
+      console.error('Detailed Supabase Save Error:', err);
       // Fallback to local state if DB fails (optional, depending on requirements)
       setSubmissions(prev => [submissionWithOrg, ...prev]);
       await runAnalysis(submissionWithOrg.id, submissionWithOrg);

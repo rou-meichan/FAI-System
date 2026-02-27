@@ -2,8 +2,8 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { FAISubmission, SubmissionStatus, DocType } from "../types";
 
-// Always use const ai = new GoogleGenAI({apiKey: process.env.GEMINI_API_KEY});
-const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+// Use import.meta.env for Vite environment variables
+const ai = new GoogleGenAI({ apiKey: import.meta.env.VITE_GEMINI_API_KEY });
 
 /**
  * Gemini supported MIME types for multimodal input (inlineData)

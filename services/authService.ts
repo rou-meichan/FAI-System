@@ -3,6 +3,7 @@ import { supabase } from './supabase';
 
 class AuthService {
     async signUp(email: string, password: string, metadata?: any) {
+        console.log('Attempting signup for:', email);
         const { data, error } = await supabase.auth.signUp({ 
             email, 
             password,
@@ -10,7 +11,10 @@ class AuthService {
                 data: metadata
             }
         });
-        if (error) throw error;
+        if (error) {
+            console.error('Signup error details:', error);
+            throw error;
+        }
         return data;
     }
 

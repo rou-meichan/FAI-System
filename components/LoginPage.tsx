@@ -53,7 +53,8 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
         }
       }
     } catch (err: any) {
-      setError(err.message || 'Authentication failed');
+      console.error('Auth error:', err);
+      setError(err.message || 'Authentication failed. Please check your connection or Supabase settings.');
     } finally {
       setIsLoading(false);
     }
