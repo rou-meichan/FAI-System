@@ -4,11 +4,13 @@ import { DocType, FAIFile, FAISubmission, SubmissionStatus } from '../types';
 import { StatusBadge } from './IQADashboard';
 import PDFPreview from './PDFPreview';
 import { base64ToBlob } from '../src/utils/fileUtils';
+import { uploadFile } from '../services/storageService';
 
 interface SupplierPortalProps {
   onSubmit: (submission: FAISubmission) => void;
   submissions: FAISubmission[];
   onViewDetail: (id: string) => void;
+  userId: string;
 }
 
 const ITEMS_PER_PAGE = 8;
@@ -67,10 +69,11 @@ const FilePreviewModal: React.FC<{ file: FAIFile; onClose: () => void }> = ({ fi
   );
 };
 
-const SupplierPortal: React.FC<SupplierPortalProps> = ({ onSubmit, submissions, onViewDetail }) => {
+const SupplierPortal: React.FC<SupplierPortalProps> = ({ onSubmit, submissions, onViewDetail, userId }) => {
   const [partNumber, setPartNumber] = useState('');
   const [revision, setRevision] = useState('');
   const [files, setFiles] = useState<FAIFile[]>([]);
+  const [actualFiles, setActualFiles] = useState<Record<string, File>>({}); // Store actual File objects
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [activeTab, setActiveTab] = useState<'NEW' | 'HISTORY'>('HISTORY');
   const [previewingFile, setPreviewingFile] = useState<FAIFile | null>(null);
@@ -98,11 +101,12 @@ const SupplierPortal: React.FC<SupplierPortalProps> = ({ onSubmit, submissions, 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>, type: DocType) => {
     const file = e.target.files?.[0];
     if (file) {
+      const fileId = Math.random().toString(36).substr(2, 9);
       const reader = new FileReader();
       reader.onload = (event) => {
         const dataUrl = event.target?.result as string;
         const newFile: FAIFile = {
-          id: Math.random().toString(36).substr(2, 9),
+          id: fileId,
           type,
           name: file.name,
           mimeType: file.type || 'application/octet-stream',
@@ -111,6 +115,7 @@ const SupplierPortal: React.FC<SupplierPortalProps> = ({ onSubmit, submissions, 
           isMandatory: DOCUMENT_CONFIG.find(c => c.type === type)?.mandatory || false,
         };
         
+        setActualFiles(prev => ({ ...prev, [fileId]: file }));
         setFiles(prev => {
           const existingIndex = prev.findIndex(f => f.type === type);
           if (existingIndex > -1) {
@@ -126,42 +131,81 @@ const SupplierPortal: React.FC<SupplierPortalProps> = ({ onSubmit, submissions, 
   };
 
   const handleDeleteFile = (type: DocType) => {
+    const fileToDelete = files.find(f => f.type === type);
+    if (fileToDelete) {
+      setActualFiles(prev => {
+        const updated = { ...prev };
+        delete updated[fileToDelete.id];
+        return updated;
+      });
+    }
     setFiles(prev => prev.filter(f => f.type !== type));
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
 
-    const submission: FAISubmission = {
-      id: `SUB-${Date.now()}`,
-      supplierName: '', 
-      partNumber,
-      revision,
-      timestamp: Date.now(),
-      status: SubmissionStatus.PENDING_AI,
-      files,
-    };
+    try {
+      const submissionId = `SUB-${Date.now()}`;
+      
+      // Upload files to storage first
+      const uploadedFiles = await Promise.all(files.map(async (fileInfo) => {
+        const actualFile = actualFiles[fileInfo.id];
+        if (actualFile) {
+          const storagePath = `${userId}/${submissionId}/${fileInfo.id}_${fileInfo.name}`;
+          const { path, url } = await uploadFile(actualFile, storagePath);
+          return {
+            ...fileInfo,
+            storagePath: path,
+            url: url,
+            // We keep the 'data' (base64) here so the AI can use it immediately in App.tsx
+            // The faiService.ts will strip it before saving to the database.
+          };
+        }
+        return fileInfo;
+      }));
 
-    setTimeout(() => {
+      const submission: FAISubmission = {
+        id: submissionId,
+        supplierName: '', 
+        partNumber,
+        revision,
+        timestamp: Date.now(),
+        status: SubmissionStatus.PENDING_AI,
+        files: uploadedFiles,
+      };
+
       onSubmit(submission);
-      setIsSubmitting(false);
       setPartNumber('');
       setRevision('');
       setFiles([]);
+      setActualFiles({});
       setActiveTab('HISTORY');
       setCurrentPage(1);
-    }, 1500);
+    } catch (error) {
+      console.error('Submission failed:', error);
+      alert('Failed to upload files. Please check your connection and try again.');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const handlePreview = (file: FAIFile) => {
+    if (file.url) {
+      window.open(file.url, '_blank');
+      return;
+    }
+
     if (file.mimeType === 'application/pdf') {
+      if (!file.data) {
+        alert('File data is missing and cannot be previewed.');
+        return;
+      }
       try {
-        const blob = base64ToBlob(file.data!, 'application/pdf');
+        const blob = base64ToBlob(file.data, 'application/pdf');
         const url = URL.createObjectURL(blob);
         window.open(url, '_blank');
-        // We don't revoke immediately because the new tab needs it, 
-        // but in a real app we might want a way to clean up.
       } catch (error) {
         console.error('Failed to open PDF:', error);
       }

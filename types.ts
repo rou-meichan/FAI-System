@@ -26,7 +26,9 @@ export interface FAIFile {
   name: string;
   mimeType: string;
   lastModified: number;
-  data?: string; // Base64 with or without data URL prefix
+  data?: string; // Base64 (still useful for local preview before submit)
+  storagePath?: string; // Path in Supabase Storage
+  url?: string; // Public URL
   isMandatory: boolean;
 }
 

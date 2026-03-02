@@ -3,6 +3,9 @@
  * Converts a base64 string to a Blob object.
  */
 export const base64ToBlob = (base64: string, mimeType: string): Blob => {
+  if (!base64) {
+    throw new Error('Base64 string is required');
+  }
   const byteCharacters = atob(base64.split(',')[1] || base64);
   const byteArrays = [];
 

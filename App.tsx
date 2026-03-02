@@ -279,6 +279,7 @@ const App: React.FC = () => {
         <SubmissionDetail 
           submission={selectedSub} 
           userRole={user.role}
+          userId={user.id}
           onClose={() => setSelectedSubmissionId(null)} 
           onDecision={async (decision, remarks) => {
             const status = decision === 'APPROVED' ? SubmissionStatus.APPROVED : SubmissionStatus.REJECTED;
@@ -318,7 +319,7 @@ const App: React.FC = () => {
         return <div className="space-y-8"><header className="space-y-2"><h1 className="text-3xl font-black text-slate-900 tracking-tight">FAI Request Ledger</h1><p className="text-slate-500 max-w-2xl font-medium">Detailed tracking and management of all active First Article Inspections.</p></header><IQADashboard submissions={submissions} onViewDetail={(id) => setSelectedSubmissionId(id)} onManageSuppliers={() => handleViewChange('SUPPLIERS')} viewMode="TABLE_ONLY" /></div>;
       default:
         if (user.role === 'SUPPLIER') {
-          return <div className="space-y-12"><header className="space-y-2"><h1 className="text-3xl font-black text-slate-900 tracking-tight">Supplier Dashboard</h1><p className="text-slate-500 max-w-2xl font-medium">Welcome back, {user.name}. Track your FAI submissions and receive real-time audit feedback.</p></header><SupplierPortal onSubmit={handleNewSubmission} submissions={supplierSubmissions} onViewDetail={(id) => { setSubmissions(prev => prev.map(s => s.id === id ? { ...s, isNewVerdict: false } : s)); setSelectedSubmissionId(id); }} /></div>;
+          return <div className="space-y-12"><header className="space-y-2"><h1 className="text-3xl font-black text-slate-900 tracking-tight">Supplier Dashboard</h1><p className="text-slate-500 max-w-2xl font-medium">Welcome back, {user.name}. Track your FAI submissions and receive real-time audit feedback.</p></header><SupplierPortal onSubmit={handleNewSubmission} submissions={supplierSubmissions} userId={user.id} onViewDetail={(id) => { setSubmissions(prev => prev.map(s => s.id === id ? { ...s, isNewVerdict: false } : s)); setSelectedSubmissionId(id); }} /></div>;
         }
         return <div className="space-y-8"><header className="space-y-2"><h1 className="text-3xl font-black text-slate-900 tracking-tight">IQA Command Center</h1><p className="text-slate-500 max-w-2xl font-medium">Hello {user.name}. Monitoring compliance across {submissions.length} active and archived packages.</p></header><IQADashboard submissions={submissions} onViewDetail={(id) => setSelectedSubmissionId(id)} onManageSuppliers={() => handleViewChange('SUPPLIERS')} /></div>;
     }

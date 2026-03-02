@@ -26,13 +26,28 @@ export const analyzeFAISubmission = async (submission: FAISubmission): Promise<a
 
   // 1. Filter and prepare only supported media files for the AI to "See"
   const supportedMediaFiles = submission.files.filter(f => 
-    f.data && SUPPORTED_AI_MIMES.includes(f.mimeType.toLowerCase())
+    (f.data || f.url) && SUPPORTED_AI_MIMES.includes(f.mimeType.toLowerCase())
   );
 
-  const mediaParts = supportedMediaFiles.map(f => {
-    const base64Data = f.data!.includes('base64,') 
-      ? f.data!.split('base64,')[1] 
-      : f.data!;
+  const mediaParts = await Promise.all(supportedMediaFiles.map(async (f) => {
+    let base64Data = '';
+    
+    if (f.data) {
+      base64Data = f.data.includes('base64,') 
+        ? f.data.split('base64,')[1] 
+        : f.data;
+    } else if (f.url) {
+      try {
+        const response = await fetch(f.url);
+        const blob = await response.blob();
+        const buffer = await blob.arrayBuffer();
+        base64Data = btoa(
+          new Uint8Array(buffer).reduce((data, byte) => data + String.fromCharCode(byte), '')
+        );
+      } catch (err) {
+        console.error(`Failed to fetch file from URL for AI analysis: ${f.url}`, err);
+      }
+    }
 
     return {
       inlineData: {
@@ -40,7 +55,7 @@ export const analyzeFAISubmission = async (submission: FAISubmission): Promise<a
         mimeType: f.mimeType
       }
     };
-  });
+  }));
 
   // 2. Create a detailed text summary of ALL files (including non-readable ones)
   const fileInventory = submission.files.map(f => {

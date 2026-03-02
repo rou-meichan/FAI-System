@@ -7,27 +7,53 @@ interface RegistrationPageProps {
 }
 
 const RegistrationPage: React.FC<RegistrationPageProps> = ({ type, onBack, onSubmit }) => {
-  const [formData, setFormData] = useState({ name: '', email: '', extra: '' });
+  const [formData, setFormData] = useState({ name: '', email: '', extra: '', password: '' });
   const [isProcessing, setIsProcessing] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsProcessing(true);
+    setError(null);
     
-    // Simulate API delay
-    setTimeout(() => {
+    try {
+      const metadata = {
+        name: formData.name,
+        role: type,
+        organization: type === 'SUPPLIER' ? formData.extra : 'Global IQA Office',
+        designation: type === 'EMPLOYEE' ? formData.extra : undefined
+      };
+
+      const response = await fetch('/api/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: formData.email,
+          password: formData.password,
+          metadata
+        })
+      });
+
+      const result = await response.json();
+      if (!result.success) throw new Error(result.error);
+      
       const payload = {
         name: formData.name,
         email: formData.email,
         [type === 'SUPPLIER' ? 'organization' : 'role']: formData.extra
       };
+      
       setIsProcessing(false);
       setShowSuccess(true);
       
       // Navigate back after success animation
       setTimeout(() => onSubmit(payload), 1500);
-    }, 1000);
+    } catch (err: any) {
+      console.error('Registration error:', err);
+      setError(err.message || 'Failed to authorize identity. Please try again.');
+      setIsProcessing(false);
+    }
   };
 
   const extraLabel = type === 'SUPPLIER' ? 'Corporate Entity' : 'Authorized Designation';
@@ -111,6 +137,11 @@ const RegistrationPage: React.FC<RegistrationPageProps> = ({ type, onBack, onSub
           {/* Form Side */}
           <div className="md:col-span-3 p-8 md:p-12 bg-white">
             <form onSubmit={handleSubmit} className="space-y-6">
+              {error && (
+                <div className="p-4 bg-rose-50 border border-rose-100 rounded-2xl text-[10px] font-bold text-rose-600 uppercase tracking-tight">
+                  {error}
+                </div>
+              )}
               <div className="space-y-1.5">
                 <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Legal Full Name</label>
                 <input 
@@ -143,6 +174,18 @@ const RegistrationPage: React.FC<RegistrationPageProps> = ({ type, onBack, onSub
                   placeholder={extraPlaceholder}
                   value={formData.extra}
                   onChange={e => setFormData(prev => ({ ...prev, extra: e.target.value }))}
+                  className={`w-full px-5 py-4 bg-slate-50 border border-slate-200 rounded-2xl outline-none transition-all font-bold text-sm shadow-inner focus:ring-4 ${focusRing}`}
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Access Password</label>
+                <input 
+                  required
+                  type="password" 
+                  placeholder="••••••••"
+                  value={formData.password}
+                  onChange={e => setFormData(prev => ({ ...prev, password: e.target.value }))}
                   className={`w-full px-5 py-4 bg-slate-50 border border-slate-200 rounded-2xl outline-none transition-all font-bold text-sm shadow-inner focus:ring-4 ${focusRing}`}
                 />
               </div>

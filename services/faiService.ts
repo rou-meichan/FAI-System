@@ -3,14 +3,23 @@ import { supabase } from './supabase';
 
 // Insert function for FAI submissions
 export const insertFAISubmission = async (submissionData: any) => {
-    // Clean up undefined values which can cause Supabase 400 errors
-    const cleanData = Object.fromEntries(
-        Object.entries(submissionData).filter(([_, v]) => v !== undefined)
+    // Clean up undefined values and strip large base64 data from files
+    const cleanData = { ...submissionData };
+    if (cleanData.files && Array.isArray(cleanData.files)) {
+        cleanData.files = cleanData.files.map((f: any) => {
+            const { data, ...rest } = f;
+            return rest;
+        });
+    }
+
+    const filteredData = Object.fromEntries(
+        Object.entries(cleanData).filter(([_, v]) => v !== undefined)
     );
 
+    console.log('Attempting Supabase Insert with data (stripped):', filteredData);
     const { data, error } = await supabase
         .from('fai')
-        .insert([cleanData])
+        .insert([filteredData])
         .select();
     if (error) {
         console.error('Supabase Insert Error:', error);
@@ -35,14 +44,23 @@ export const fetchFAISubmissions = async (userId?: string) => {
 
 // Update function for FAI submissions
 export const updateFAISubmission = async (id: string, updatedData: any) => {
-    // Clean up undefined values
-    const cleanData = Object.fromEntries(
-        Object.entries(updatedData).filter(([_, v]) => v !== undefined)
+    // Clean up undefined values and strip base64 data
+    const cleanData = { ...updatedData };
+    if (cleanData.files && Array.isArray(cleanData.files)) {
+        cleanData.files = cleanData.files.map((f: any) => {
+            const { data, ...rest } = f;
+            return rest;
+        });
+    }
+
+    const filteredData = Object.fromEntries(
+        Object.entries(cleanData).filter(([_, v]) => v !== undefined)
     );
 
+    console.log(`Attempting Supabase Update for ID ${id} with data (stripped):`, filteredData);
     const { data, error } = await supabase
         .from('fai')
-        .update(cleanData)
+        .update(filteredData)
         .eq('id', id)
         .select();
     if (error) {

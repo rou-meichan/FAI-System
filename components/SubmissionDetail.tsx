@@ -4,10 +4,12 @@ import { StatusBadge } from './IQADashboard';
 import { DOCUMENT_CONFIG } from '../constants';
 import PDFPreview from './PDFPreview';
 import { base64ToBlob } from '../src/utils/fileUtils';
+import { uploadFile } from '../services/storageService';
 
 interface SubmissionDetailProps {
   submission: FAISubmission;
   userRole: UserRole;
+  userId: string;
   onClose: () => void;
   onDecision: (decision: 'APPROVED' | 'REJECTED', remarks: string) => void;
   onUpdateSubmission?: (id: string, files: FAIFile[]) => void;
@@ -40,15 +42,15 @@ const FilePreviewModal: React.FC<{ file: FAIFile; onClose: () => void }> = ({ fi
         </div>
 
         <div className="flex-1 bg-slate-50 flex items-center justify-center p-2 md:p-4 overflow-auto">
-          {file.data ? (
+          {file.url || file.data ? (
             file.mimeType === 'application/pdf' ? (
               <PDFPreview 
-                data={file.data} 
+                data={file.url || file.data!} 
                 title={file.name}
                 className="w-full h-full rounded-lg md:rounded-xl shadow-inner border border-slate-200 bg-white"
               />
             ) : (
-              <img src={file.data} alt={file.name} className="max-w-full max-h-full object-contain shadow-xl rounded-lg md:rounded-xl" />
+              <img src={file.url || file.data} alt={file.name} className="max-w-full max-h-full object-contain shadow-xl rounded-lg md:rounded-xl" />
             )
           ) : (
             <div className="text-center p-10 bg-white rounded-3xl border border-slate-200 mx-4">
@@ -64,6 +66,7 @@ const FilePreviewModal: React.FC<{ file: FAIFile; onClose: () => void }> = ({ fi
 const SubmissionDetail: React.FC<SubmissionDetailProps> = ({ 
   submission, 
   userRole, 
+  userId,
   onClose, 
   onDecision,
   onUpdateSubmission 
@@ -71,6 +74,7 @@ const SubmissionDetail: React.FC<SubmissionDetailProps> = ({
   const [remarks, setRemarks] = useState('');
   const [previewingFile, setPreviewingFile] = useState<FAIFile | null>(null);
   const [editableFiles, setEditableFiles] = useState<FAIFile[]>(submission.files);
+  const [actualFiles, setActualFiles] = useState<Record<string, File>>({}); // Store actual File objects for new uploads
   const [isResubmitting, setIsResubmitting] = useState(false);
 
   useEffect(() => {
@@ -92,9 +96,18 @@ const SubmissionDetail: React.FC<SubmissionDetailProps> = ({
   });
 
   const handlePreview = (file: FAIFile) => {
+    if (file.url) {
+      window.open(file.url, '_blank');
+      return;
+    }
+
     if (file.mimeType === 'application/pdf') {
+      if (!file.data) {
+        alert('File data is missing and cannot be previewed.');
+        return;
+      }
       try {
-        const blob = base64ToBlob(file.data!, 'application/pdf');
+        const blob = base64ToBlob(file.data, 'application/pdf');
         const url = URL.createObjectURL(blob);
         window.open(url, '_blank');
       } catch (error) {
@@ -124,11 +137,12 @@ const SubmissionDetail: React.FC<SubmissionDetailProps> = ({
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>, type: DocType) => {
     const file = e.target.files?.[0];
     if (file) {
+      const fileId = Math.random().toString(36).substr(2, 9);
       const reader = new FileReader();
       reader.onload = (event) => {
         const dataUrl = event.target?.result as string;
         const newFile: FAIFile = {
-          id: Math.random().toString(36).substr(2, 9),
+          id: fileId,
           type,
           name: file.name,
           mimeType: file.type || 'application/octet-stream',
@@ -137,6 +151,7 @@ const SubmissionDetail: React.FC<SubmissionDetailProps> = ({
           isMandatory: DOCUMENT_CONFIG.find(c => c.type === type)?.mandatory || false,
         };
         
+        setActualFiles(prev => ({ ...prev, [fileId]: file }));
         setEditableFiles(prev => {
           const existingIndex = prev.findIndex(f => f.type === type);
           if (existingIndex > -1) {
@@ -151,14 +166,34 @@ const SubmissionDetail: React.FC<SubmissionDetailProps> = ({
     }
   };
 
-  const handleResubmit = () => {
+  const handleResubmit = async () => {
     if (onUpdateSubmission) {
       setIsResubmitting(true);
-      onUpdateSubmission(submission.id, editableFiles);
-      setTimeout(() => {
-        setIsResubmitting(false);
+      try {
+        // Upload new files to storage
+        const uploadedFiles = await Promise.all(editableFiles.map(async (fileInfo) => {
+          const actualFile = actualFiles[fileInfo.id];
+          if (actualFile) {
+            const storagePath = `${userId}/${submission.id}/${fileInfo.id}_${fileInfo.name}`;
+            const { path, url } = await uploadFile(actualFile, storagePath);
+            return {
+              ...fileInfo,
+              storagePath: path,
+              url: url,
+              // Keep data for AI analysis in App.tsx
+            };
+          }
+          return fileInfo;
+        }));
+
+        onUpdateSubmission(submission.id, uploadedFiles);
         onClose();
-      }, 500);
+      } catch (error) {
+        console.error('Resubmission failed:', error);
+        alert('Failed to upload files. Please try again.');
+      } finally {
+        setIsResubmitting(false);
+      }
     }
   };
 
