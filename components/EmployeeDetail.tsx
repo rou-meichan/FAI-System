@@ -61,14 +61,14 @@ const EmployeeDetail: React.FC<EmployeeDetailProps> = ({
           {!isEditing ? (
             <button 
               onClick={() => setIsEditing(true)}
-              className="px-6 py-2.5 bg-white border border-slate-200 rounded-xl font-black text-xs text-slate-600 hover:border-indigo-600 hover:text-indigo-600 transition-all shadow-sm uppercase tracking-widest"
+              className="px-6 py-2.5 bg-white border border-slate-200 rounded-xl font-black text-[10px] text-slate-600 hover:border-indigo-600 hover:text-indigo-600 transition-all shadow-sm uppercase tracking-widest"
             >
               Edit Profile
             </button>
           ) : (
             <button 
               onClick={() => setIsEditing(false)}
-              className="px-6 py-2.5 bg-slate-100 rounded-xl font-black text-xs text-slate-600 hover:bg-slate-200 transition-all uppercase tracking-widest"
+              className="px-6 py-2.5 bg-slate-100 rounded-xl font-black text-[10px] text-slate-600 hover:bg-slate-200 transition-all uppercase tracking-widest"
             >
               Cancel
             </button>

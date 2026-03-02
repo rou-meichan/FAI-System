@@ -213,16 +213,36 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ user, onBack }) => {
                   <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Official Designation</label>
                   <input 
                     type="text" 
+                    readOnly
                     defaultValue={user.role === 'SUPPLIER' ? 'Lead Supply Manager' : 'Senior Quality Auditor'}
-                    className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-4 focus:ring-indigo-50 focus:border-indigo-600 outline-none transition-all font-bold text-sm shadow-inner"
+                    className="w-full px-4 py-3 bg-slate-100/60 border border-slate-200 rounded-2xl outline-none font-bold text-sm shadow-inner cursor-not-allowed text-slate-500"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Gender</label>
+                  <input 
+                    type="text" 
+                    readOnly
+                    defaultValue={user.gender || 'Not Specified'}
+                    className="w-full px-4 py-3 bg-slate-100/60 border border-slate-200 rounded-2xl outline-none font-bold text-sm shadow-inner cursor-not-allowed text-slate-500"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Date of Birth</label>
+                  <input 
+                    type="text" 
+                    readOnly
+                    defaultValue={user.date_of_birth || 'Not Specified'}
+                    className="w-full px-4 py-3 bg-slate-100/60 border border-slate-200 rounded-2xl outline-none font-bold text-sm shadow-inner cursor-not-allowed text-slate-500"
                   />
                 </div>
                 <div className="space-y-2">
                   <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Telecommunications</label>
                   <input 
                     type="text" 
-                    placeholder="+1 (555) 000-0000"
-                    className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-4 focus:ring-indigo-50 focus:border-indigo-600 outline-none transition-all font-bold text-sm shadow-inner"
+                    readOnly
+                    defaultValue={user.phone_number || 'Not Specified'}
+                    className="w-full px-4 py-3 bg-slate-100/60 border border-slate-200 rounded-2xl outline-none font-bold text-sm shadow-inner cursor-not-allowed text-slate-500"
                   />
                 </div>
               </div>
@@ -231,7 +251,7 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ user, onBack }) => {
                  <button 
                   type="submit"
                   disabled={isProfileUpdating}
-                  className="bg-slate-900 text-white px-10 py-3.5 rounded-2xl text-[10px] font-black uppercase tracking-[0.2em] shadow-2xl shadow-slate-100 hover:bg-black transition-all active:scale-95 disabled:opacity-50"
+                  className="bg-slate-900 text-white px-8 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest shadow-lg shadow-slate-100 hover:bg-black transition-all active:scale-95 disabled:opacity-50"
                  >
                    {isProfileUpdating ? 'Synchronizing...' : 'Update Information'}
                  </button>

@@ -75,10 +75,10 @@ const SupplierDetail: React.FC<SupplierDetailProps> = ({
             </svg>
           </button>
           <div className="min-w-0">
-            <h1 className="text-xl md:text-3xl font-black text-slate-900 tracking-tight truncate">
+            <h1 className="text-xl md:text-2xl font-black text-slate-900 tracking-tight truncate leading-none">
               {isEditing ? 'Editing Profile' : supplier.organization}
             </h1>
-            <p className="text-xs md:text-sm text-slate-500 font-medium">Partner Profile & History</p>
+            <p className="text-slate-500 font-medium text-[10px] md:text-xs mt-1">Partner Profile & History</p>
           </div>
         </div>
         <div className="flex flex-wrap gap-2 md:gap-3">
@@ -86,7 +86,7 @@ const SupplierDetail: React.FC<SupplierDetailProps> = ({
             <>
               <button 
                 onClick={() => setIsEditing(true)}
-                className="flex-1 md:flex-none px-4 md:px-6 py-2.5 bg-white border border-slate-200 rounded-xl font-black text-[10px] md:text-xs text-slate-600 hover:border-indigo-600 hover:text-indigo-600 transition-all shadow-sm flex items-center justify-center gap-2 uppercase tracking-widest"
+                className="flex-1 md:flex-none px-4 md:px-6 py-2.5 bg-white border border-slate-200 rounded-xl font-black text-[10px] text-slate-600 hover:border-indigo-600 hover:text-indigo-600 transition-all shadow-sm flex items-center justify-center gap-2 uppercase tracking-widest"
               >
                 <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
@@ -95,7 +95,7 @@ const SupplierDetail: React.FC<SupplierDetailProps> = ({
               </button>
               <button 
                 onClick={() => onToggleStatus(supplier.id)}
-                className={`flex-1 md:flex-none px-4 md:px-6 py-2.5 rounded-xl font-black text-[10px] md:text-xs transition-all border uppercase tracking-widest ${
+                className={`flex-1 md:flex-none px-4 md:px-6 py-2.5 rounded-xl font-black text-[10px] transition-all border uppercase tracking-widest ${
                   supplier.status === 'ACTIVE' 
                     ? 'bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100' 
                     : 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100'
@@ -108,13 +108,13 @@ const SupplierDetail: React.FC<SupplierDetailProps> = ({
             <>
               <button 
                 onClick={handleCancel}
-                className="flex-1 md:flex-none px-4 md:px-6 py-2.5 bg-slate-100 rounded-xl font-black text-[10px] md:text-xs text-slate-600 hover:bg-slate-200 transition-all uppercase tracking-widest"
+                className="flex-1 md:flex-none px-4 md:px-6 py-2.5 bg-slate-100 rounded-xl font-black text-[10px] text-slate-600 hover:bg-slate-200 transition-all uppercase tracking-widest"
               >
                 Cancel
               </button>
               <button 
                 onClick={handleSave}
-                className="flex-1 md:flex-none px-4 md:px-6 py-2.5 bg-indigo-600 text-white rounded-xl font-black text-[10px] md:text-xs shadow-lg shadow-indigo-100 hover:bg-indigo-700 transition-all uppercase tracking-widest"
+                className="flex-1 md:flex-none px-4 md:px-6 py-2.5 bg-indigo-600 text-white rounded-xl font-black text-[10px] shadow-lg shadow-indigo-100 hover:bg-indigo-700 transition-all uppercase tracking-widest"
               >
                 Save
               </button>

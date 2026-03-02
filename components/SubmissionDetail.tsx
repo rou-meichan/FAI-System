@@ -27,8 +27,8 @@ const FilePreviewModal: React.FC<{ file: FAIFile; onClose: () => void }> = ({ fi
               </svg>
             </div>
             <div className="min-w-0">
-              <h3 className="font-black text-slate-900 tracking-tight text-xs md:text-sm truncate max-w-[140px] md:max-w-none">{file.name}</h3>
-              <p className="text-[8px] md:text-[9px] text-slate-400 font-bold uppercase tracking-widest">{file.type}</p>
+              <h3 className="font-black text-slate-900 tracking-tight text-sm md:text-base truncate max-w-[140px] md:max-w-none">{file.name}</h3>
+              <p className="text-[10px] md:text-xs text-slate-400 font-bold uppercase tracking-widest">{file.type}</p>
             </div>
           </div>
           <button 
@@ -95,6 +95,14 @@ const SubmissionDetail: React.FC<SubmissionDetailProps> = ({
     day: 'numeric',
   });
 
+  const formatFileSize = (bytes: number) => {
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+  };
+
   const handlePreview = (file: FAIFile) => {
     if (file.url) {
       window.open(file.url, '_blank');
@@ -144,11 +152,12 @@ const SubmissionDetail: React.FC<SubmissionDetailProps> = ({
         const newFile: FAIFile = {
           id: fileId,
           type,
-          name: file.name,
+          name: type,
           mimeType: file.type || 'application/octet-stream',
           lastModified: file.lastModified,
           data: dataUrl,
           isMandatory: DOCUMENT_CONFIG.find(c => c.type === type)?.mandatory || false,
+          size: file.size,
         };
         
         setActualFiles(prev => ({ ...prev, [fileId]: file }));
@@ -201,15 +210,15 @@ const SubmissionDetail: React.FC<SubmissionDetailProps> = ({
 
   const packageMeta = (
     <div className="bg-white border border-slate-200 rounded-[1.5rem] md:rounded-[2rem] p-5 md:p-6 shadow-sm">
-      <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">Package Meta</h3>
+      <h3 className="text-sm md:text-base font-black text-slate-900 uppercase tracking-widest mb-4">Package Meta</h3>
       <div className="grid grid-cols-2 lg:grid-cols-1 gap-4">
         <div>
-          <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Entity</p>
-          <p className="text-xs font-black text-slate-900 truncate">{submission.supplierName}</p>
+          <p className="text-[10px] md:text-xs font-black text-slate-400 uppercase tracking-widest mb-1">Entity</p>
+          <p className="text-xs md:text-sm font-black text-slate-900 truncate">{submission.supplierName}</p>
         </div>
         <div>
-          <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Receipt Date</p>
-          <p className="text-xs font-black text-slate-900">{formattedDate}</p>
+          <p className="text-[10px] md:text-xs font-black text-slate-400 uppercase tracking-widest mb-1">Receipt Date</p>
+          <p className="text-xs md:text-sm font-black text-slate-900">{formattedDate}</p>
         </div>
       </div>
       <div className="pt-4 border-t border-slate-100 mt-4">
@@ -217,7 +226,7 @@ const SubmissionDetail: React.FC<SubmissionDetailProps> = ({
           <svg className="w-4 h-4 text-slate-400 mt-0.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
           </svg>
-          <p className="text-[9px] font-bold text-slate-500 leading-normal uppercase tracking-tight">
+          <p className="text-[10px] md:text-xs font-bold text-slate-500 leading-normal uppercase tracking-tight">
             This record is secured and archived for audit compliance.
           </p>
         </div>
@@ -235,14 +244,14 @@ const SubmissionDetail: React.FC<SubmissionDetailProps> = ({
       <div className="flex items-center justify-between mb-4 shrink-0">
         <div className="flex items-center gap-2">
           <div className="w-1.5 h-4 bg-indigo-600 rounded-full"></div>
-          <h3 className="text-[10px] font-black text-slate-900 uppercase tracking-widest">Digital Artifacts</h3>
+          <h3 className="text-sm md:text-base font-black text-slate-900 uppercase tracking-widest">Digital Artifacts</h3>
         </div>
       </div>
       
       <div className={`flex-1 ${isSupplier ? 'grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5' : 'space-y-2 overflow-y-auto max-h-[350px] pr-2'} [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-slate-200 [&::-webkit-scrollbar-thumb]:rounded-full hover:[&::-webkit-scrollbar-thumb]:bg-slate-300`}>
         {editableFiles.length === 0 ? (
            <div className="text-center py-8 border border-dashed border-slate-200 rounded-2xl">
-             <p className="text-[10px] font-bold text-slate-300 uppercase">No artifacts attached</p>
+             <p className="text-xs md:text-sm font-bold text-slate-300 uppercase">No artifacts attached</p>
            </div>
         ) : (
           (hideUnprovidedArtifacts 
@@ -272,10 +281,19 @@ const SubmissionDetail: React.FC<SubmissionDetailProps> = ({
                     </svg>
                   </div>
                   <div className="min-w-0 flex-1">
-                    <p className={`text-[10px] font-black truncate ${file ? 'text-slate-900' : 'text-slate-400'}`}>
-                      {file ? file.name : 'Not Provided'}
+                    <p className={`text-xs md:text-sm font-black truncate ${file ? 'text-slate-900' : 'text-slate-400'}`}>
+                      {config.type}
                     </p>
-                    <p className="text-[7px] text-slate-500 font-bold uppercase tracking-widest truncate">{config.type}</p>
+                    {file && (
+                      <p className="text-[9px] md:text-[10px] text-slate-500 font-bold uppercase tracking-tight mt-0.5">
+                        {formatFileSize(file.size || 0)}
+                      </p>
+                    )}
+                    {!file && (
+                      <p className="text-[9px] md:text-[10px] text-rose-400 font-bold uppercase tracking-tight mt-0.5">
+                        Not Provided
+                      </p>
+                    )}
                   </div>
                 </div>
                 
@@ -305,12 +323,12 @@ const SubmissionDetail: React.FC<SubmissionDetailProps> = ({
           </svg>
         </div>
         <div>
-          <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest">IQA Human Review</h3>
-          <p className="text-[10px] text-slate-400 font-bold uppercase tracking-tight mt-0.5">Official Compliance Verdict</p>
+          <h3 className="text-sm md:text-base font-black text-slate-900 uppercase tracking-widest">IQA Human Review</h3>
+          <p className="text-[10px] md:text-xs font-bold text-slate-400 uppercase tracking-widest mt-0.5">Official Compliance Verdict</p>
         </div>
       </div>
       <div className="p-4 md:p-5 bg-slate-50 border-l-4 border-indigo-600 rounded-r-2xl shadow-inner">
-        <p className="text-slate-800 font-black italic text-sm md:text-base leading-relaxed">"{submission.iqaRemarks}"</p>
+        <p className="text-slate-800 font-black italic text-base md:text-lg leading-relaxed">"{submission.iqaRemarks}"</p>
       </div>
     </div>
   );
@@ -325,8 +343,8 @@ const SubmissionDetail: React.FC<SubmissionDetailProps> = ({
              </svg>
           </div>
           <div>
-            <h3 className="text-sm md:text-base font-black text-slate-900 uppercase tracking-tight leading-none">Revise Package</h3>
-            <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-1">Address feedback and re-upload artifacts</p>
+            <h3 className="text-sm md:text-base font-black text-slate-900 uppercase tracking-widest leading-none">Revise Package</h3>
+            <p className="text-[10px] md:text-xs text-slate-400 font-bold uppercase tracking-widest mt-1">Address feedback and re-upload artifacts</p>
           </div>
         </div>
         
@@ -339,7 +357,7 @@ const SubmissionDetail: React.FC<SubmissionDetailProps> = ({
         <button 
           onClick={handleResubmit}
           disabled={isResubmitting || !hasUnsavedChanges}
-          className={`px-6 py-3 rounded-xl md:rounded-2xl font-black text-xs uppercase tracking-[0.2em] shadow-lg transition-all active:scale-95 flex items-center justify-center gap-3 min-w-[200px] ${
+          className={`px-6 py-2.5 rounded-xl font-black text-[10px] uppercase tracking-widest shadow-lg transition-all active:scale-95 flex items-center justify-center gap-2 min-w-[180px] ${
             hasUnsavedChanges && !isResubmitting
               ? 'bg-indigo-600 text-white hover:bg-indigo-700 shadow-indigo-100'
               : 'bg-slate-100 text-slate-400 cursor-not-allowed'
@@ -383,14 +401,14 @@ const SubmissionDetail: React.FC<SubmissionDetailProps> = ({
             </button>
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-                <h1 className="text-xl md:text-3xl font-black text-slate-900 tracking-tight uppercase truncate">
+                <h1 className="text-xl md:text-2xl font-black text-slate-900 tracking-tight uppercase truncate leading-none">
                   {submission.partNumber}
                 </h1>
                 <span className="px-2 py-0.5 bg-slate-100 border border-slate-200 text-slate-500 text-[8px] md:text-[10px] font-black rounded-lg uppercase tracking-widest shrink-0">
                   Rev {submission.revision}
                 </span>
               </div>
-              <p className="text-slate-500 font-medium text-[10px] md:text-sm truncate mt-1">
+              <p className="text-slate-500 font-medium text-[10px] md:text-xs truncate mt-1">
                 Package ID: {submission.id} • {submission.supplierName}
               </p>
             </div>
@@ -433,7 +451,7 @@ const SubmissionDetail: React.FC<SubmissionDetailProps> = ({
                       </svg>
                     </div>
                     <div>
-                      <p className="text-base md:text-xl font-black text-slate-900 tracking-tight uppercase">Audit Intelligence</p>
+                      <h3 className="text-sm md:text-base font-black text-slate-900 tracking-widest uppercase leading-none">Audit Intelligence</h3>
                     </div>
                   </div>
                   
@@ -447,16 +465,16 @@ const SubmissionDetail: React.FC<SubmissionDetailProps> = ({
                 </div>
 
                 <div className="p-5 md:p-8 bg-slate-50 border border-slate-100 rounded-2xl md:rounded-3xl mb-4 md:mb-6 shadow-inner">
-                  <p className="text-slate-700 font-bold text-xs md:text-base leading-relaxed italic">
+                  <p className="text-slate-700 font-bold text-sm md:text-base leading-relaxed italic">
                     {submission.aiAnalysis?.summary || "Analyzing digital artifacts for regulatory and technical markers..."}
                   </p>
                 </div>
 
                 <div className="space-y-4">
                   <div className="flex items-center justify-between px-2">
-                    <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Verification Checklist</h3>
+                    <h3 className="text-sm md:text-base font-black text-slate-900 uppercase tracking-widest">Verification Checklist</h3>
                     {submission.aiAnalysis && (
-                      <span className="text-[8px] font-bold text-slate-300 uppercase">{submission.aiAnalysis.details.length} Items</span>
+                      <span className="text-xs font-bold text-slate-300 uppercase">{submission.aiAnalysis.details.length} Items</span>
                     )}
                   </div>
                   <div className="space-y-3 max-h-[400px] overflow-y-auto pr-2 [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-slate-200 [&::-webkit-scrollbar-thumb]:rounded-full hover:[&::-webkit-scrollbar-thumb]:bg-slate-300">
@@ -472,17 +490,10 @@ const SubmissionDetail: React.FC<SubmissionDetailProps> = ({
                                 'bg-slate-300'
                               }`}></div>
                               <div className="min-w-0 flex-1">
-                                <span className="text-[10px] md:text-xs font-black text-slate-900 uppercase tracking-tight block truncate">{detail.docType}</span>
+                                <span className="text-xs md:text-sm font-black text-slate-900 uppercase tracking-tight block truncate">{detail.docType}</span>
                                 <div className="flex items-center gap-2 mt-0.5 truncate">
-                                  {matchingFile ? (
-                                    <span className="text-[8px] md:text-[10px] text-emerald-600 font-bold flex items-center gap-1 truncate">
-                                      <svg className="w-2.5 h-2.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
-                                      </svg>
-                                      <span className="truncate">Artifact Linked</span>
-                                    </span>
-                                  ) : (
-                                    <span className="text-[8px] md:text-[10px] text-rose-400 font-bold flex items-center gap-1">
+                                  {!matchingFile && (
+                                    <span className="text-[10px] md:text-xs text-rose-400 font-bold flex items-center gap-1">
                                       <svg className="w-2.5 h-2.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M6 18L18 6M6 6l12 12" />
                                       </svg>
@@ -494,7 +505,7 @@ const SubmissionDetail: React.FC<SubmissionDetailProps> = ({
                             </div>
                             
                             <div className="shrink-0">
-                              <div className={`px-2 py-0.5 md:px-2.5 md:py-1 rounded-lg text-[8px] md:text-[9px] font-black uppercase tracking-widest ${
+                              <div className={`px-2 py-0.5 md:px-2.5 md:py-1 rounded-lg text-[10px] md:text-xs font-black uppercase tracking-widest ${
                                 detail.result === 'PASS' ? 'bg-emerald-50 text-emerald-700' : 
                                 detail.result === 'FAIL' ? 'bg-rose-50 text-rose-700' : 'bg-slate-50 text-slate-500'
                               }`}>
@@ -503,7 +514,7 @@ const SubmissionDetail: React.FC<SubmissionDetailProps> = ({
                             </div>
                           </div>
                           <div className="mt-3 pt-3 border-t border-slate-50">
-                            <p className="text-[10px] md:text-[11px] text-slate-500 font-medium leading-relaxed italic">"{detail.notes}"</p>
+                            <p className="text-xs md:text-sm text-slate-500 font-medium leading-relaxed italic">"{detail.notes}"</p>
                           </div>
                         </div>
                       );
@@ -522,8 +533,8 @@ const SubmissionDetail: React.FC<SubmissionDetailProps> = ({
                   </svg>
                 </div>
                 <div className="max-w-md">
-                  <h3 className="text-xl font-black text-slate-900 uppercase tracking-tight">Audit in Progress</h3>
-                  <p className="text-slate-500 font-medium text-sm mt-2 leading-relaxed">
+                  <h3 className="text-sm md:text-base font-black text-slate-900 uppercase tracking-widest">Audit in Progress</h3>
+                  <p className="text-slate-500 font-medium text-xs md:text-sm mt-2 leading-relaxed">
                     Your FAI package is currently being evaluated by the IQA compliance team. Official human feedback will appear here once the review is finalized.
                   </p>
                 </div>
@@ -538,13 +549,13 @@ const SubmissionDetail: React.FC<SubmissionDetailProps> = ({
             {/* Decision Panel (IQA ONLY) */}
             {needsDecision && (
               <div className="bg-white border-2 border-indigo-100 rounded-[1.5rem] md:rounded-[2rem] p-5 md:p-8 shadow-xl shadow-indigo-100/20 animate-in slide-in-from-top-2">
-                <h3 className="text-base md:text-lg font-black text-slate-900 mb-6 flex items-center gap-2 uppercase tracking-tight">
+                <h3 className="text-sm md:text-base font-black text-slate-900 mb-6 flex items-center gap-2 uppercase tracking-widest">
                   <span className="w-1 h-5 md:w-1.5 md:h-6 bg-indigo-600 rounded-full"></span>
                   Official Validation
                 </h3>
                 <div className="space-y-5 md:space-y-6">
                   <div>
-                    <label className="block text-[9px] md:text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">Review Remarks</label>
+                    <label className="block text-[10px] md:text-xs font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">Review Remarks</label>
                     <textarea 
                       value={remarks}
                       onChange={(e) => setRemarks(e.target.value)}
@@ -556,14 +567,14 @@ const SubmissionDetail: React.FC<SubmissionDetailProps> = ({
                     <button 
                       onClick={() => onDecision('APPROVED', remarks)}
                       disabled={!remarks.trim()}
-                      className="py-3.5 md:py-4 bg-emerald-600 text-white rounded-xl md:rounded-2xl font-black text-[10px] md:text-xs uppercase tracking-[0.2em] shadow-lg shadow-emerald-100 hover:bg-emerald-700 transition-all active:scale-95 disabled:opacity-50"
+                      className="py-2.5 bg-emerald-600 text-white rounded-xl font-black text-[11px] md:text-xs uppercase tracking-widest shadow-lg shadow-emerald-100 hover:bg-emerald-700 transition-all active:scale-95 disabled:opacity-50"
                     >
                       Release Approval
                     </button>
                     <button 
                       onClick={() => onDecision('REJECTED', remarks)}
                       disabled={!remarks.trim()}
-                      className="py-3.5 md:py-4 bg-white text-rose-600 border border-rose-100 rounded-xl md:rounded-2xl font-black text-[10px] md:text-xs uppercase tracking-[0.2em] hover:bg-rose-50 transition-all active:scale-95 disabled:opacity-50"
+                      className="py-2.5 bg-white text-rose-600 border border-rose-100 rounded-xl font-black text-[11px] md:text-xs uppercase tracking-widest hover:bg-rose-50 transition-all active:scale-95 disabled:opacity-50"
                     >
                       Issue Rejection
                     </button>

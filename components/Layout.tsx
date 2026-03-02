@@ -144,8 +144,8 @@ const Layout: React.FC<LayoutProps> = ({
                   </svg>
                 </div>
                 <div>
-                  <span className="text-xl font-bold tracking-tight text-slate-900">FAI Agent</span>
-                  <p className="text-[8px] text-slate-400 font-black uppercase tracking-[0.2em]">Compliance v2.0</p>
+                  <span className="text-lg font-bold tracking-tight text-slate-900">FAI Agent</span>
+                  <p className="text-[7px] text-slate-400 font-black uppercase tracking-[0.2em]">Compliance v2.0</p>
                 </div>
               </div>
               <button 
@@ -165,7 +165,7 @@ const Layout: React.FC<LayoutProps> = ({
                 <button
                   key={item.id}
                   onClick={() => handleNavClick(item.id)}
-                  className={`w-full flex items-center gap-3 px-4 py-3.5 rounded-2xl text-sm font-black transition-all group ${
+                  className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-black transition-all group ${
                     currentView === item.id 
                       ? 'bg-indigo-50 text-indigo-600 shadow-sm' 
                       : 'text-slate-500 hover:bg-slate-50 hover:text-slate-700'
@@ -192,8 +192,8 @@ const Layout: React.FC<LayoutProps> = ({
                   {user.name[0]}
                 </div>
                 <div className="min-w-0 flex-1">
-                  <p className="text-xs font-black text-slate-900 truncate group-hover:text-indigo-600 transition-colors">{user.name}</p>
-                  <p className="text-[10px] text-slate-400 font-bold uppercase tracking-tight">View Account</p>
+                  <p className="text-[11px] font-black text-slate-900 truncate group-hover:text-indigo-600 transition-colors">{user.name}</p>
+                  <p className="text-[9px] text-slate-400 font-bold uppercase tracking-tight">View Account</p>
                 </div>
                 <svg className="w-4 h-4 text-slate-300 group-hover:text-indigo-600 transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5l7 7-7 7" />

@@ -108,11 +108,12 @@ const SupplierPortal: React.FC<SupplierPortalProps> = ({ onSubmit, submissions, 
         const newFile: FAIFile = {
           id: fileId,
           type,
-          name: file.name,
+          name: type,
           mimeType: file.type || 'application/octet-stream',
           lastModified: file.lastModified,
           data: dataUrl,
           isMandatory: DOCUMENT_CONFIG.find(c => c.type === type)?.mandatory || false,
+          size: file.size,
         };
         
         setActualFiles(prev => ({ ...prev, [fileId]: file }));
@@ -298,7 +299,7 @@ const SupplierPortal: React.FC<SupplierPortalProps> = ({ onSubmit, submissions, 
             <div className="bg-white rounded-[1.5rem] md:rounded-[2rem] shadow-sm border border-slate-200 p-5 md:p-6 sticky top-24">
               <div className="flex items-center gap-3 mb-4">
                  <div className="w-1.5 h-5 bg-indigo-600 rounded-full"></div>
-                 <h2 className="text-sm md:text-base font-black tracking-tight text-slate-900 uppercase">
+                 <h2 className="text-sm md:text-base font-black tracking-tight text-slate-900 uppercase leading-none">
                   Package Context
                 </h2>
               </div>
@@ -320,7 +321,7 @@ const SupplierPortal: React.FC<SupplierPortalProps> = ({ onSubmit, submissions, 
                     type="submit"
                     onClick={handleSubmit}
                     disabled={!isFormValid || isSubmitting}
-                    className={`w-full py-3 rounded-xl font-black text-xs uppercase tracking-[0.2em] flex items-center justify-center gap-3 transition-all ${
+                    className={`w-full py-2.5 rounded-xl font-black text-[10px] uppercase tracking-widest flex items-center justify-center gap-2 transition-all ${
                       isFormValid && !isSubmitting 
                         ? 'bg-indigo-600 text-white hover:bg-indigo-700 shadow-lg shadow-indigo-100 hover:-translate-y-0.5' 
                         : 'bg-slate-100 text-slate-400 cursor-not-allowed'
@@ -445,22 +446,22 @@ const SupplierPortal: React.FC<SupplierPortalProps> = ({ onSubmit, submissions, 
         <div className="space-y-4 md:space-y-6 animate-in fade-in slide-in-from-right-4 duration-500">
           {submissions.length > 0 && (
             <div className="bg-white p-4 md:p-6 rounded-[1.5rem] border border-slate-200 shadow-sm space-y-4">
-              <div className="flex flex-col md:flex-row gap-3 md:gap-4 items-center">
+              <div className="flex flex-col md:flex-row gap-2 items-center">
                 <div className="relative flex-1 w-full" ref={datePickerRef}>
                   <div className="relative group">
-                    <svg className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 md:w-5 md:h-5 text-slate-400 group-focus-within:text-indigo-500 transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                    <svg className="absolute left-3.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 group-focus-within:text-indigo-500 transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                     </svg>
                     <input 
                       type="text" 
                       placeholder="Search Part Number or ID..."
                       value={searchQuery}
                       onChange={(e) => setSearchQuery(e.target.value)}
-                      className="w-full pl-10 md:pl-12 pr-12 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-4 focus:ring-indigo-50 focus:border-indigo-500 outline-none transition-all text-xs md:text-sm font-bold"
+                      className="w-full pl-10 pr-10 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:ring-4 focus:ring-indigo-50 focus:border-indigo-500 outline-none transition-all text-[11px] font-bold shadow-inner"
                     />
                     <button 
                       onClick={() => setShowDatePicker(!showDatePicker)}
-                      className={`absolute right-3 top-1/2 -translate-y-1/2 p-1.5 md:p-2 rounded-lg transition-all ${
+                      className={`absolute right-2 top-1/2 -translate-y-1/2 p-1.5 rounded-lg transition-all ${
                         (startDate || endDate) && !isDateRangeInvalid
                           ? 'bg-indigo-600 text-white shadow-md' 
                           : isDateRangeInvalid
@@ -468,8 +469,8 @@ const SupplierPortal: React.FC<SupplierPortalProps> = ({ onSubmit, submissions, 
                             : 'text-slate-400 hover:bg-slate-100 hover:text-indigo-600'
                       }`}
                     >
-                      <svg className="w-4 h-4 md:w-5 md:h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2-2v12a2 2 0 002 2z" />
+                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2-2v12a2 2 0 002 2z" />
                       </svg>
                     </button>
                   </div>
@@ -590,7 +591,7 @@ const SupplierPortal: React.FC<SupplierPortalProps> = ({ onSubmit, submissions, 
               <p className="text-xs md:text-sm text-slate-500 font-medium max-w-xs mx-auto mt-2">You haven't submitted any FAI packages for this account yet.</p>
               <button 
                 onClick={() => setActiveTab('NEW')}
-                className="mt-6 md:mt-8 bg-indigo-600 text-white px-6 md:px-8 py-2.5 md:py-3 rounded-xl md:rounded-2xl font-black text-xs md:text-sm shadow-lg shadow-indigo-100 hover:bg-indigo-700 transition-all"
+                className="mt-6 md:mt-8 bg-indigo-600 text-white px-6 py-2.5 rounded-xl font-black text-[10px] uppercase tracking-widest shadow-lg shadow-indigo-100 hover:bg-indigo-700 transition-all active:scale-95"
               >
                 Start First Submission
               </button>

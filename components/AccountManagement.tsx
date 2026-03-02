@@ -113,17 +113,17 @@ const AccountManagement: React.FC<AccountManagementProps> = ({
     >
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
         <div>
-          <h1 className="text-2xl md:text-3xl font-black text-slate-900 tracking-tight uppercase">Account Management</h1>
-          <p className="text-slate-500 font-medium text-xs md:text-base">Control digital identities and access levels for partners.</p>
+          <h1 className="text-xl md:text-2xl font-black text-slate-900 tracking-tight uppercase leading-none">Account Management</h1>
+          <p className="text-slate-500 font-medium text-[10px] md:text-xs mt-1">Control digital identities and access levels for partners.</p>
         </div>
       </div>
 
       <div className="flex flex-col gap-6">
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
-          <div className="flex p-1.5 bg-slate-100 rounded-[1.25rem] w-full md:w-auto">
+          <div className="flex p-1 bg-slate-100 rounded-2xl w-full md:w-auto">
             <button 
               onClick={(e) => { e.stopPropagation(); onTabChange('SUPPLIERS'); }}
-              className={`flex-1 md:flex-none px-4 md:px-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-[0.2em] transition-all ${
+              className={`flex-1 md:flex-none px-4 md:px-5 py-2 rounded-xl text-[9px] font-black uppercase tracking-[0.15em] transition-all ${
                 activeTab === 'SUPPLIERS' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-400 hover:text-slate-600'
               }`}
             >
@@ -131,7 +131,7 @@ const AccountManagement: React.FC<AccountManagementProps> = ({
             </button>
             <button 
               onClick={(e) => { e.stopPropagation(); onTabChange('EMPLOYEES'); }}
-              className={`flex-1 md:flex-none px-4 md:px-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-[0.2em] transition-all ${
+              className={`flex-1 md:flex-none px-4 md:px-5 py-2 rounded-xl text-[9px] font-black uppercase tracking-[0.15em] transition-all ${
                 activeTab === 'EMPLOYEES' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-400 hover:text-slate-600'
               }`}
             >
@@ -141,19 +141,19 @@ const AccountManagement: React.FC<AccountManagementProps> = ({
 
           <button 
             onClick={(e) => { e.stopPropagation(); onRegisterRequest(activeTab); }}
-            className="w-full md:w-auto bg-indigo-600 text-white px-8 py-3 rounded-2xl font-black text-xs uppercase tracking-widest flex items-center justify-center gap-3 shadow-xl shadow-indigo-100 hover:bg-indigo-700 hover:-translate-y-0.5 transition-all active:scale-95"
+            className="w-full md:w-auto bg-indigo-600 text-white px-6 py-2.5 rounded-xl font-black text-[10px] uppercase tracking-widest flex items-center justify-center gap-2 shadow-lg shadow-indigo-100 hover:bg-indigo-700 hover:-translate-y-0.5 transition-all active:scale-95"
           >
-            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
             </svg>
             Register {activeTab === 'SUPPLIERS' ? 'Supplier' : 'Employee'}
           </button>
         </div>
 
-        <div className="bg-white p-4 md:p-5 rounded-[1.5rem] md:rounded-[2rem] border border-slate-200 shadow-sm border-b-4 border-b-slate-100 flex flex-col gap-4 animate-in fade-in slide-in-from-top-2 duration-300">
-          <div className="flex items-center gap-3">
+        <div className="bg-white p-3 md:p-4 rounded-2xl md:rounded-3xl border border-slate-200 shadow-sm flex flex-col gap-3 animate-in fade-in slide-in-from-top-2 duration-300">
+          <div className="flex items-center gap-2">
             <div className="flex-1 relative group" onClick={(e) => e.stopPropagation()}>
-              <svg className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 group-focus-within:text-indigo-600 transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <svg className="absolute left-3.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 group-focus-within:text-indigo-600 transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
               </svg>
               <input 
@@ -161,26 +161,25 @@ const AccountManagement: React.FC<AccountManagementProps> = ({
                 placeholder={`Search profiles...`}
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-11 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-4 focus:ring-indigo-50 focus:border-indigo-600 outline-none transition-all font-bold text-xs shadow-inner"
+                className="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:ring-4 focus:ring-indigo-50 focus:border-indigo-600 outline-none transition-all font-bold text-[11px] shadow-inner"
               />
             </div>
             <button 
               onClick={(e) => { e.stopPropagation(); setShowFilters(!showFilters); }}
-              className={`p-2.5 rounded-xl border transition-all flex items-center gap-2 ${
+              className={`p-2 rounded-xl border transition-all flex items-center gap-2 ${
                 showFilters || statusFilter !== 'ALL' || startDate || endDate
-                  ? 'bg-indigo-600 text-white border-indigo-600 shadow-lg shadow-indigo-100' 
+                  ? 'bg-indigo-600 text-white border-indigo-600 shadow-md' 
                   : 'bg-white text-slate-500 border-slate-200 hover:border-indigo-600 hover:text-indigo-600'
               }`}
             >
-              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
               </svg>
-              <span className="text-[10px] font-black uppercase tracking-widest hidden sm:inline">Filters</span>
+              <span className="text-[9px] font-black uppercase tracking-widest hidden sm:inline">Filters</span>
               {(statusFilter !== 'ALL' || startDate || endDate) && (
-                <span className="w-2 h-2 rounded-full bg-white animate-pulse"></span>
+                <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse"></span>
               )}
             </button>
-
           </div>
 
           {showFilters && (

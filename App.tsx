@@ -45,7 +45,10 @@ const App: React.FC = () => {
             name: session.user.user_metadata?.name || session.user.email?.split('@')[0] || 'User',
             email: session.user.email || '',
             role: userRole,
-            organization: session.user.user_metadata?.organization || (userRole === 'SUPPLIER' ? 'Unknown Supplier' : 'IQA Dept')
+            organization: session.user.user_metadata?.organization || (userRole === 'SUPPLIER' ? 'Unknown Supplier' : 'IQA Dept'),
+            gender: session.user.user_metadata?.gender,
+            date_of_birth: session.user.user_metadata?.date_of_birth,
+            phone_number: session.user.user_metadata?.phone_number
           });
         }
       } catch (err) {
@@ -98,8 +101,8 @@ const App: React.FC = () => {
         status: SubmissionStatus.APPROVED,
         iqaRemarks: 'Excellent submission. Material certification is clear and dimensions are well within tolerance limits.',
         files: [
-           { id: 'f3', type: 'Engineering Drawing' as any, name: 'CPU-V1.pdf', mimeType: 'application/pdf', lastModified: Date.now(), isMandatory: true },
-           { id: 'f4', type: 'Material Certification & CoC' as any, name: 'MAT_CERT_001.pdf', mimeType: 'application/pdf', lastModified: Date.now(), isMandatory: true }
+           { id: 'f3', type: 'Engineering Drawing' as any, name: 'CPU-V1.pdf', mimeType: 'application/pdf', lastModified: Date.now(), isMandatory: true, size: 1240000 },
+           { id: 'f4', type: 'Material Certification & CoC' as any, name: 'MAT_CERT_001.pdf', mimeType: 'application/pdf', lastModified: Date.now(), isMandatory: true, size: 850000 }
         ],
         aiAnalysis: {
           overallVerdict: 'APPROVED',
@@ -116,8 +119,8 @@ const App: React.FC = () => {
         status: SubmissionStatus.REJECTED,
         iqaRemarks: 'Missing REACH compliance document. Dimension 4.2 in the FAI report exceeds drawing tolerance by 0.05mm. Please revise and resubmit.',
         files: [
-          { id: 'f5', type: 'Engineering Drawing' as any, name: 'PSU_DRAWING.png', mimeType: 'image/png', lastModified: Date.now(), isMandatory: true },
-          { id: 'f6', type: 'FAI Report (Supplier)' as any, name: 'DATA.xlsx', mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', lastModified: Date.now(), isMandatory: true }
+          { id: 'f5', type: 'Engineering Drawing' as any, name: 'PSU_DRAWING.png', mimeType: 'image/png', lastModified: Date.now(), isMandatory: true, size: 2400000 },
+          { id: 'f6', type: 'FAI Report (Supplier)' as any, name: 'DATA.xlsx', mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', lastModified: Date.now(), isMandatory: true, size: 450000 }
         ],
         aiAnalysis: {
           overallVerdict: 'REJECTED',
@@ -316,12 +319,12 @@ const App: React.FC = () => {
         }
         return <AccountManagement activeTab={mgmtActiveTab} onTabChange={setMgmtActiveTab} suppliers={suppliers} employees={employees} onRegisterRequest={(tab) => handleViewChange(tab === 'SUPPLIERS' ? 'REGISTER_SUPPLIER' : 'REGISTER_EMPLOYEE')} onDeleteSupplier={(id) => setSuppliers(prev => prev.filter(s => s.id !== id))} onToggleSupplierStatus={(id) => setSuppliers(prev => prev.map(s => s.id === id ? { ...s, status: s.status === 'ACTIVE' ? 'DEACTIVATED' : 'ACTIVE' as any } : s))} onUpdateSupplier={(id, updates) => setSuppliers(prev => prev.map(s => s.id === id ? { ...s, ...updates } : s))} onDeleteEmployee={(id) => setEmployees(prev => prev.filter(e => e.id !== id))} onToggleEmployeeStatus={(id) => setEmployees(prev => prev.map(e => e.id === id ? { ...e, status: e.status === 'ACTIVE' ? 'DEACTIVATED' : 'ACTIVE' as any } : e))} onUpdateEmployee={(id, updates) => setEmployees(prev => prev.map(e => e.id === id ? { ...e, ...updates } : e))} onViewSupplierDetail={(id) => { setSelectedManagedSupplierId(id); setIsManagedEditMode(false); }} onEditSupplierDetail={(id) => { setSelectedManagedSupplierId(id); setIsManagedEditMode(true); }} onViewEmployeeDetail={(id) => { setSelectedEmployeeId(id); setIsManagedEditMode(false); }} onEditEmployeeDetail={(id) => { setSelectedEmployeeId(id); setIsManagedEditMode(true); }} onBack={() => handleViewChange('DASHBOARD')} />;
       case 'FAI_REQUESTS':
-        return <div className="space-y-8"><header className="space-y-2"><h1 className="text-3xl font-black text-slate-900 tracking-tight">FAI Request Ledger</h1><p className="text-slate-500 max-w-2xl font-medium">Detailed tracking and management of all active First Article Inspections.</p></header><IQADashboard submissions={submissions} onViewDetail={(id) => setSelectedSubmissionId(id)} onManageSuppliers={() => handleViewChange('SUPPLIERS')} viewMode="TABLE_ONLY" /></div>;
+        return <div className="space-y-8"><header className="space-y-1"><h1 className="text-xl md:text-2xl font-black text-slate-900 tracking-tight uppercase leading-none">FAI Request Ledger</h1><p className="text-slate-500 font-medium text-[10px] md:text-xs mt-1">Detailed tracking and management of all active First Article Inspections.</p></header><IQADashboard submissions={submissions} onViewDetail={(id) => setSelectedSubmissionId(id)} onManageSuppliers={() => handleViewChange('SUPPLIERS')} viewMode="TABLE_ONLY" /></div>;
       default:
         if (user.role === 'SUPPLIER') {
-          return <div className="space-y-12"><header className="space-y-2"><h1 className="text-3xl font-black text-slate-900 tracking-tight">Supplier Dashboard</h1><p className="text-slate-500 max-w-2xl font-medium">Welcome back, {user.name}. Track your FAI submissions and receive real-time audit feedback.</p></header><SupplierPortal onSubmit={handleNewSubmission} submissions={supplierSubmissions} userId={user.id} onViewDetail={(id) => { setSubmissions(prev => prev.map(s => s.id === id ? { ...s, isNewVerdict: false } : s)); setSelectedSubmissionId(id); }} /></div>;
+          return <div className="space-y-12"><header className="space-y-1"><h1 className="text-xl md:text-2xl font-black text-slate-900 tracking-tight uppercase leading-none">Supplier Dashboard</h1><p className="text-slate-500 font-medium text-[10px] md:text-xs mt-1">Welcome back, {user.name}. Track your FAI submissions and receive real-time audit feedback.</p></header><SupplierPortal onSubmit={handleNewSubmission} submissions={supplierSubmissions} userId={user.id} onViewDetail={(id) => { setSubmissions(prev => prev.map(s => s.id === id ? { ...s, isNewVerdict: false } : s)); setSelectedSubmissionId(id); }} /></div>;
         }
-        return <div className="space-y-8"><header className="space-y-2"><h1 className="text-3xl font-black text-slate-900 tracking-tight">IQA Command Center</h1><p className="text-slate-500 max-w-2xl font-medium">Hello {user.name}. Monitoring compliance across {submissions.length} active and archived packages.</p></header><IQADashboard submissions={submissions} onViewDetail={(id) => setSelectedSubmissionId(id)} onManageSuppliers={() => handleViewChange('SUPPLIERS')} /></div>;
+        return <div className="space-y-8"><header className="space-y-1"><h1 className="text-xl md:text-2xl font-black text-slate-900 tracking-tight uppercase leading-none">IQA Command Center</h1><p className="text-slate-500 font-medium text-[10px] md:text-xs mt-1">Hello {user.name}. Monitoring compliance across {submissions.length} active and archived packages.</p></header><IQADashboard submissions={submissions} onViewDetail={(id) => setSelectedSubmissionId(id)} onManageSuppliers={() => handleViewChange('SUPPLIERS')} /></div>;
     }
   };
 

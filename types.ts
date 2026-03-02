@@ -30,6 +30,7 @@ export interface FAIFile {
   storagePath?: string; // Path in Supabase Storage
   url?: string; // Public URL
   isMandatory: boolean;
+  size?: number; // File size in bytes
 }
 
 export interface FAISubmission {
@@ -60,6 +61,9 @@ export interface User {
   name: string;
   role: UserRole;
   organization: string;
+  gender?: string;
+  date_of_birth?: string;
+  phone_number?: string;
 }
 
 export interface SupplierAccount {
@@ -69,6 +73,9 @@ export interface SupplierAccount {
   email: string;
   status: 'ACTIVE' | 'DEACTIVATED';
   createdDate: number;
+  gender?: string;
+  date_of_birth?: string;
+  phone_number?: string;
 }
 
 export interface EmployeeAccount {
@@ -78,4 +85,7 @@ export interface EmployeeAccount {
   role: string;
   status: 'ACTIVE' | 'DEACTIVATED';
   createdDate: number;
+  gender?: string;
+  date_of_birth?: string;
+  phone_number?: string;
 }
