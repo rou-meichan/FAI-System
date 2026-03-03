@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 
 interface RegistrationPageProps {
-  type: 'SUPPLIER' | 'EMPLOYEE';
+  type: 'SUPPLIER' | 'IQA';
   onBack: () => void;
   onSubmit: (data: any) => void;
 }
@@ -11,7 +11,7 @@ const RegistrationPage: React.FC<RegistrationPageProps> = ({ type, onBack, onSub
   const [formData, setFormData] = useState({ 
     name: '', 
     email: '', 
-    extra: type === 'EMPLOYEE' ? 'Vitrox' : '', 
+    extra: type === 'IQA' ? 'Vitrox' : '', 
     password: '', 
     confirmPassword: '',
     gender: '',
@@ -346,11 +346,11 @@ const RegistrationPage: React.FC<RegistrationPageProps> = ({ type, onBack, onSub
                   <input 
                     required
                     type="text" 
-                    disabled={type === 'EMPLOYEE'}
+                    disabled={type === 'IQA'}
                     placeholder={extraPlaceholder}
                     value={formData.extra}
                     onChange={e => setFormData(prev => ({ ...prev, extra: e.target.value }))}
-                    className={`w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl outline-none transition-all font-bold text-sm shadow-inner focus:ring-4 ${focusRing} ${type === 'EMPLOYEE' ? 'opacity-70 cursor-not-allowed' : ''}`}
+                    className={`w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl outline-none transition-all font-bold text-sm shadow-inner focus:ring-4 ${focusRing} ${type === 'IQA' ? 'opacity-70 cursor-not-allowed' : ''}`}
                   />
                 </div>
               </div>

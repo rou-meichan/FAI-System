@@ -4,7 +4,8 @@ import { DocType, FAIFile, FAISubmission, SubmissionStatus } from '../types';
 import { StatusBadge } from './IQADashboard';
 import PDFPreview from './PDFPreview';
 import { base64ToBlob } from '../src/utils/fileUtils';
-import { uploadFile } from '../services/storageService';
+import { uploadFile, getFileUrl } from '../services/storageService';
+import { fetchProfile } from '../services/faiService';
 
 interface SupplierPortalProps {
   onSubmit: (submission: FAISubmission) => void;
@@ -16,6 +17,26 @@ interface SupplierPortalProps {
 const ITEMS_PER_PAGE = 8;
 
 const FilePreviewModal: React.FC<{ file: FAIFile; onClose: () => void }> = ({ file, onClose }) => {
+  const [signedUrl, setSignedUrl] = useState<string | null>(file.url || null);
+  const [isLoading, setIsLoading] = useState(!file.url && !!file.storagePath);
+
+  useEffect(() => {
+    const fetchUrl = async () => {
+      if (!file.url && file.storagePath) {
+        setIsLoading(true);
+        try {
+          const url = await getFileUrl(file.storagePath);
+          setSignedUrl(url);
+        } catch (error) {
+          console.error('Failed to fetch signed URL:', error);
+        } finally {
+          setIsLoading(false);
+        }
+      }
+    };
+    fetchUrl();
+  }, [file]);
+
   return (
     <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-[200] flex items-center justify-center p-2 md:p-10 animate-in fade-in duration-300">
       <div className="bg-white w-full max-w-5xl h-full max-h-[95vh] md:max-h-[90vh] rounded-[1.5rem] md:rounded-[2.5rem] shadow-2xl flex flex-col overflow-hidden animate-in zoom-in-95 duration-300">
@@ -42,15 +63,24 @@ const FilePreviewModal: React.FC<{ file: FAIFile; onClose: () => void }> = ({ fi
         </div>
 
         <div className="flex-1 bg-slate-50 flex items-center justify-center p-2 md:p-12 overflow-auto">
-          {file.data ? (
+          {isLoading ? (
+            <div className="text-center space-y-3">
+              <div className="w-12 h-12 bg-indigo-50 text-indigo-600 rounded-full flex items-center justify-center mx-auto animate-spin">
+                <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                </svg>
+              </div>
+              <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Authenticating Access...</p>
+            </div>
+          ) : signedUrl || file.data ? (
             file.mimeType === 'application/pdf' ? (
               <PDFPreview 
-                data={file.data} 
+                data={signedUrl || file.data!} 
                 title={file.name}
                 className="w-full h-full rounded-xl md:rounded-2xl shadow-inner border border-slate-200"
               />
             ) : (
-              <img src={file.data} alt={file.name} className="max-w-full max-h-full object-contain shadow-2xl rounded-lg md:rounded-xl" />
+              <img src={signedUrl || file.data} alt={file.name} className="max-w-full max-h-full object-contain shadow-2xl rounded-lg md:rounded-xl" />
             )
           ) : (
             <div className="text-center space-y-4 max-w-sm p-6">
@@ -84,9 +114,25 @@ const SupplierPortal: React.FC<SupplierPortalProps> = ({ onSubmit, submissions, 
   const [startDate, setStartDate] = useState<string>('');
   const [endDate, setEndDate] = useState<string>('');
   const [showDatePicker, setShowDatePicker] = useState(false);
+  const [maxUploadSize, setMaxUploadSize] = useState<number>(2 * 1024 * 1024);
+  const [uploadError, setUploadError] = useState<string | null>(null);
   
   const datePickerRef = useRef<HTMLDivElement>(null);
   const today = new Date().toISOString().split('T')[0];
+
+  useEffect(() => {
+    const loadProfile = async () => {
+      try {
+        const profile = await fetchProfile(userId);
+        if (profile?.max_upload_size) {
+          setMaxUploadSize(profile.max_upload_size);
+        }
+      } catch (error) {
+        console.error('Failed to load profile:', error);
+      }
+    };
+    loadProfile();
+  }, [userId]);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -101,6 +147,13 @@ const SupplierPortal: React.FC<SupplierPortalProps> = ({ onSubmit, submissions, 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>, type: DocType) => {
     const file = e.target.files?.[0];
     if (file) {
+      setUploadError(null);
+      if (file.size > maxUploadSize) {
+        const limitMB = (maxUploadSize / (1024 * 1024)).toFixed(0);
+        setUploadError(`File exceeds your ${limitMB}MB limit. Please contact the IQA team for an increase.`);
+        return;
+      }
+
       const fileId = Math.random().toString(36).substr(2, 9);
       const reader = new FileReader();
       reader.onload = (event) => {
@@ -155,7 +208,8 @@ const SupplierPortal: React.FC<SupplierPortalProps> = ({ onSubmit, submissions, 
         const actualFile = actualFiles[fileInfo.id];
         if (actualFile) {
           const storagePath = `${userId}/${submissionId}/${fileInfo.id}_${fileInfo.name}`;
-          const { path, url } = await uploadFile(actualFile, storagePath);
+          const { path } = await uploadFile(actualFile, storagePath);
+          const url = await getFileUrl(path);
           return {
             ...fileInfo,
             storagePath: path,
@@ -296,6 +350,19 @@ const SupplierPortal: React.FC<SupplierPortalProps> = ({ onSubmit, submissions, 
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 md:gap-8 animate-in fade-in slide-in-from-left-4 duration-500">
           {/* Form Side - consistent with Detail sidebar */}
           <div className="lg:col-span-4 space-y-6">
+            {uploadError && (
+              <div className="bg-rose-50 border border-rose-100 rounded-[1.5rem] md:rounded-[2rem] p-5 md:p-6 animate-in fade-in slide-in-from-top-2">
+                <div className="flex items-center gap-3 mb-2">
+                  <div className="w-8 h-8 rounded-xl bg-rose-100 flex items-center justify-center text-rose-600">
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                    </svg>
+                  </div>
+                  <h3 className="text-xs md:text-sm font-black text-rose-900 uppercase tracking-widest">Upload Error</h3>
+                </div>
+                <p className="text-[10px] md:text-xs font-bold text-rose-600 leading-relaxed uppercase tracking-tight">{uploadError}</p>
+              </div>
+            )}
             <div className="bg-white rounded-[1.5rem] md:rounded-[2rem] shadow-sm border border-slate-200 p-5 md:p-6 sticky top-24">
               <div className="flex items-center gap-3 mb-4">
                  <div className="w-1.5 h-5 bg-indigo-600 rounded-full"></div>

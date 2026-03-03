@@ -61,9 +61,11 @@ export interface User {
   name: string;
   role: UserRole;
   organization: string;
+  createdDate: number;
   gender?: string;
   date_of_birth?: string;
   phone_number?: string;
+  email?: string;
 }
 
 export interface SupplierAccount {
@@ -83,6 +85,7 @@ export interface EmployeeAccount {
   name: string;
   email: string;
   role: string;
+  organization: string;
   status: 'ACTIVE' | 'DEACTIVATED';
   createdDate: number;
   gender?: string;

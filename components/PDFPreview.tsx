@@ -14,6 +14,12 @@ const PDFPreview: React.FC<PDFPreviewProps> = ({ data, title, className }) => {
   useEffect(() => {
     if (!data) return;
 
+    // If it's already a URL (signed URL or public URL), use it directly
+    if (data.startsWith('http')) {
+      setUrl(data);
+      return;
+    }
+
     try {
       const blob = base64ToBlob(data, 'application/pdf');
       const objectUrl = URL.createObjectURL(blob);

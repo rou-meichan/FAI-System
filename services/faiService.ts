@@ -79,3 +79,34 @@ export const deleteFAISubmission = async (id: string) => {
     if (error) throw error;
 };
 
+// Profile functions
+export const fetchProfile = async (id: string) => {
+    const { data, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', id)
+        .single();
+    if (error) throw error;
+    return data;
+};
+
+export const updateProfile = async (id: string, updatedData: any) => {
+    const { data, error } = await supabase
+        .from('profiles')
+        .update(updatedData)
+        .eq('id', id)
+        .select();
+    if (error) throw error;
+    return data;
+};
+
+export const fetchAllProfiles = async (role?: string) => {
+    let query = supabase.from('profiles').select('*');
+    if (role) {
+        query = query.eq('role', role);
+    }
+    const { data, error } = await query;
+    if (error) throw error;
+    return data;
+};
+

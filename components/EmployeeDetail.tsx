@@ -20,17 +20,66 @@ const EmployeeDetail: React.FC<EmployeeDetailProps> = ({
   const [isUpdating, setIsUpdating] = useState(false);
   const [isEditing, setIsEditing] = useState(initialEditMode);
   const [showSuccess, setShowSuccess] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [formData, setFormData] = useState({
     name: employee.name,
-    role: employee.role
+    gender: employee.gender || '',
+    date_of_birth: employee.date_of_birth || '',
+    phone_number: employee.phone_number || ''
   });
 
   useEffect(() => {
     setIsEditing(initialEditMode);
   }, [initialEditMode]);
 
+  const validateName = (name: string) => {
+    if (name.trim().length < 3) return 'Name must be at least 3 characters';
+    if (/^-?\d+$/.test(name.trim())) return 'Name cannot be only digits';
+    return null;
+  };
+
+  const validateDOB = (dob: string) => {
+    if (!dob) return 'Date of Birth is required';
+    const birthDate = new Date(dob);
+    const today = new Date();
+    let age = today.getFullYear() - birthDate.getFullYear();
+    const m = today.getMonth() - birthDate.getMonth();
+    if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) {
+      age--;
+    }
+    if (age < 18) return 'User must be at least 18 years old';
+    return null;
+  };
+
+  const validatePhone = (phone: string) => {
+    const digits = phone.replace(/\D/g, '');
+    if (digits.length < 10 || digits.length > 11) return 'Phone number must be 10-11 digits';
+    return null;
+  };
+
+  const handlePhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    let value = e.target.value.replace(/\D/g, '');
+    if (value.length > 11) value = value.slice(0, 11);
+    let formatted = value;
+    if (value.length > 3) {
+      formatted = value.slice(0, 3) + '-' + value.slice(3);
+    }
+    setFormData(prev => ({ ...prev, phone_number: formatted }));
+  };
+
   const handleUpdate = (e: React.FormEvent) => {
     e.preventDefault();
+    setError(null);
+
+    const nameErr = validateName(formData.name);
+    if (nameErr) { setError(nameErr); return; }
+
+    const dobErr = validateDOB(formData.date_of_birth);
+    if (dobErr) { setError(dobErr); return; }
+
+    const phoneErr = validatePhone(formData.phone_number);
+    if (phoneErr) { setError(phoneErr); return; }
+
     setIsUpdating(true);
     
     // Simulate API delay
@@ -53,7 +102,7 @@ const EmployeeDetail: React.FC<EmployeeDetailProps> = ({
             </svg>
           </button>
           <div>
-            <h1 className="text-xl md:text-2xl font-black text-slate-900 tracking-tight uppercase leading-none">Personnel Profile</h1>
+            <h1 className="text-xl md:text-2xl font-black text-slate-900 tracking-tight uppercase leading-none">IQA Personnel Profile</h1>
             <p className="text-slate-500 font-medium text-[10px] md:text-xs mt-1">Administrative view and identity management</p>
           </div>
         </div>
@@ -78,7 +127,7 @@ const EmployeeDetail: React.FC<EmployeeDetailProps> = ({
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 md:gap-8">
         {/* Profile Card */}
-        <div className="lg:col-span-1 space-y-6">
+        <div className="lg:col-span-1 space-y-6 lg:sticky lg:top-8 self-start">
           <div className="bg-white rounded-[1.5rem] md:rounded-[2rem] shadow-xl border border-slate-200 overflow-hidden">
             <div className={`h-20 ${employee.status === 'ACTIVE' ? 'bg-indigo-600' : 'bg-slate-400'}`}></div>
             <div className="px-6 pb-6 -mt-10 text-center">
@@ -102,10 +151,10 @@ const EmployeeDetail: React.FC<EmployeeDetailProps> = ({
               </div>
             </div>
             <div className="border-t border-slate-50 p-6 space-y-3">
-              <div className="flex justify-between items-center text-[9px]">
-                <span className="text-slate-400 font-black uppercase tracking-widest">Employee ID</span>
-                <span className="text-slate-700 font-black uppercase truncate ml-4">{employee.id}</span>
-              </div>
+                <div className="flex justify-between items-center text-[9px]">
+                  <span className="text-slate-400 font-black uppercase tracking-widest">Personnel ID</span>
+                  <span className="text-slate-700 font-black uppercase truncate ml-4">{employee.id}</span>
+                </div>
               <div className="flex justify-between items-center text-[9px]">
                 <span className="text-slate-400 font-black uppercase tracking-widest">Enrolled On</span>
                 <span className="text-slate-700 font-black uppercase">{new Date(employee.createdDate).toLocaleDateString()}</span>
@@ -129,11 +178,18 @@ const EmployeeDetail: React.FC<EmployeeDetailProps> = ({
                 <span className="w-1.5 h-5 bg-indigo-600 rounded-full"></span>
                 {isEditing ? 'Modify Personnel Records' : 'Identity Information'}
               </h3>
-              {showSuccess && (
-                <span className="text-[9px] font-black text-emerald-600 bg-emerald-50 px-3 py-1 rounded-full border border-emerald-100 animate-in fade-in slide-in-from-right-2 duration-300">
-                  Profile Updated
-                </span>
-              )}
+              <div className="flex items-center gap-3">
+                {error && (
+                  <span className="text-[9px] font-black text-rose-600 bg-rose-50 px-3 py-1 rounded-full border border-rose-100 animate-in fade-in slide-in-from-right-2 duration-300">
+                    {error}
+                  </span>
+                )}
+                {showSuccess && (
+                  <span className="text-[9px] font-black text-emerald-600 bg-emerald-50 px-3 py-1 rounded-full border border-emerald-100 animate-in fade-in slide-in-from-right-2 duration-300">
+                    Profile Updated
+                  </span>
+                )}
+              </div>
             </div>
             
             <form onSubmit={handleUpdate} className="space-y-6">
@@ -162,12 +218,53 @@ const EmployeeDetail: React.FC<EmployeeDetailProps> = ({
                   />
                 </div>
                 <div className="space-y-1">
-                  <label className="block text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1">Assigned Role</label>
+                  <label className="block text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1">Gender</label>
+                  {isEditing ? (
+                    <select
+                      value={formData.gender}
+                      onChange={e => setFormData({...formData, gender: e.target.value})}
+                      className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-4 focus:ring-indigo-50 focus:border-indigo-600 outline-none font-bold text-xs shadow-inner"
+                    >
+                      <option value="">Select</option>
+                      <option value="Male">Male</option>
+                      <option value="Female">Female</option>
+                      <option value="Other">Other</option>
+                    </select>
+                  ) : (
+                    <input 
+                      type="text" 
+                      readOnly
+                      value={employee.gender || 'N/A'}
+                      className="w-full px-4 py-2.5 bg-slate-100/50 border border-slate-200 rounded-xl outline-none font-bold text-xs shadow-inner cursor-not-allowed text-slate-500"
+                    />
+                  )}
+                </div>
+                <div className="space-y-1">
+                  <label className="block text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1">Date of Birth</label>
+                  {isEditing ? (
+                    <input 
+                      type="date" 
+                      value={formData.date_of_birth}
+                      onChange={e => setFormData({...formData, date_of_birth: e.target.value})}
+                      className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-4 focus:ring-indigo-50 focus:border-indigo-600 outline-none font-bold text-xs shadow-inner"
+                    />
+                  ) : (
+                    <input 
+                      type="text" 
+                      readOnly
+                      value={employee.date_of_birth || 'N/A'}
+                      className="w-full px-4 py-2.5 bg-slate-100/50 border border-slate-200 rounded-xl outline-none font-bold text-xs shadow-inner cursor-not-allowed text-slate-500"
+                    />
+                  )}
+                </div>
+                <div className="space-y-1">
+                  <label className="block text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1">Phone Number</label>
                   <input 
-                    type="text" 
+                    type="tel" 
                     readOnly={!isEditing}
-                    value={formData.role}
-                    onChange={e => setFormData({...formData, role: e.target.value})}
+                    value={formData.phone_number}
+                    onChange={handlePhoneChange}
+                    placeholder="011-12345678"
                     className={`w-full px-4 py-2.5 rounded-xl outline-none transition-all font-bold text-xs shadow-inner ${
                       isEditing ? 'bg-slate-50 border border-slate-200 focus:ring-4 focus:ring-indigo-50 focus:border-indigo-600' : 'bg-slate-100/50 border border-transparent cursor-not-allowed'
                     }`}
@@ -178,7 +275,7 @@ const EmployeeDetail: React.FC<EmployeeDetailProps> = ({
                   <input 
                     type="text" 
                     readOnly
-                    defaultValue="Global IQA Office"
+                    value={employee.organization || 'Unknown'}
                     className="w-full px-4 py-2.5 bg-slate-100/50 border border-slate-200 rounded-xl outline-none font-bold text-xs shadow-inner cursor-not-allowed text-slate-500"
                   />
                 </div>
@@ -225,7 +322,7 @@ const EmployeeDetail: React.FC<EmployeeDetailProps> = ({
                         : 'bg-emerald-600 text-white hover:bg-emerald-700 shadow-emerald-100'
                     }`}
                   >
-                    {employee.status === 'ACTIVE' ? 'Suspend Employee Access' : 'Reactivate Employee Access'}
+                    {employee.status === 'ACTIVE' ? 'Suspend Personnel Access' : 'Reactivate Personnel Access'}
                   </button>
                 </div>
               </div>

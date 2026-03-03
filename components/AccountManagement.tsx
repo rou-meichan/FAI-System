@@ -4,9 +4,9 @@ import { SupplierAccount, EmployeeAccount } from '../types';
 interface AccountManagementProps {
   suppliers: SupplierAccount[];
   employees: EmployeeAccount[];
-  activeTab: 'SUPPLIERS' | 'EMPLOYEES';
-  onTabChange: (tab: 'SUPPLIERS' | 'EMPLOYEES') => void;
-  onRegisterRequest: (tab: 'SUPPLIERS' | 'EMPLOYEES') => void;
+  activeTab: 'SUPPLIERS' | 'IQA';
+  onTabChange: (tab: 'SUPPLIERS' | 'IQA') => void;
+  onRegisterRequest: (tab: 'SUPPLIERS' | 'IQA') => void;
   onDeleteSupplier: (id: string) => void;
   onToggleSupplierStatus: (id: string) => void;
   onUpdateSupplier: (id: string, updates: Partial<SupplierAccount>) => void;
@@ -106,6 +106,17 @@ const AccountManagement: React.FC<AccountManagementProps> = ({
     setActiveMenu(null);
   }, [searchQuery, activeTab, statusFilter, startDate, endDate]);
 
+  const totalPage = Math.max(1, Math.ceil(filteredItems.length / ITEMS_PER_PAGE));
+  const paginatedItem = useMemo (() => {
+    const start = (currentPage - 1) * ITEMS_PER_PAGE;
+    return filteredItems.slice(start, start + ITEMS_PER_PAGE);
+  }, [filteredItems, currentPage]);
+
+  React.useEffect(() => {
+    setCurrentPage(1);
+    setActiveMenu(null);
+  }, [filteredItems,, currentPage]);  
+
   return (
     <div 
       className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500 min-h-screen pb-40" 
@@ -130,12 +141,12 @@ const AccountManagement: React.FC<AccountManagementProps> = ({
               Suppliers
             </button>
             <button 
-              onClick={(e) => { e.stopPropagation(); onTabChange('EMPLOYEES'); }}
+              onClick={(e) => { e.stopPropagation(); onTabChange('IQA'); }}
               className={`flex-1 md:flex-none px-4 md:px-5 py-2 rounded-xl text-[9px] font-black uppercase tracking-[0.15em] transition-all ${
-                activeTab === 'EMPLOYEES' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-400 hover:text-slate-600'
+                activeTab === 'IQA' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-400 hover:text-slate-600'
               }`}
             >
-              Employees
+              IQA Office
             </button>
           </div>
 
@@ -146,7 +157,7 @@ const AccountManagement: React.FC<AccountManagementProps> = ({
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
             </svg>
-            Register {activeTab === 'SUPPLIERS' ? 'Supplier' : 'Employee'}
+            Register {activeTab === 'SUPPLIERS' ? 'Supplier' : 'IQA Personnel'}
           </button>
         </div>
 
@@ -242,7 +253,7 @@ const AccountManagement: React.FC<AccountManagementProps> = ({
             <thead className="bg-slate-50/50">
               <tr className="border-b border-slate-100">
                 <th className="px-4 md:px-8 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest w-[40%] md:w-auto">
-                  {activeTab === 'SUPPLIERS' ? 'Name' : 'Employee'}
+                  {activeTab === 'SUPPLIERS' ? 'Name' : 'IQA Personnel'}
                 </th>
                 <th className="px-3 md:px-8 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest w-[20%] md:w-auto">
                   {activeTab === 'SUPPLIERS' ? 'Organization' : 'Role'}

@@ -11,8 +11,13 @@ DROP TABLE IF EXISTS public.profiles;
 CREATE TABLE public.profiles (
     id TEXT PRIMARY KEY, 
     name TEXT,
+    email TEXT,
     organization TEXT,
     role TEXT DEFAULT 'SUPPLIER',
+    gender TEXT,
+    date_of_birth TEXT,
+    phone_number TEXT,
+    max_upload_size BIGINT DEFAULT 2097152, -- 2MB default
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -20,14 +25,19 @@ CREATE TABLE public.profiles (
 CREATE OR REPLACE FUNCTION public.handle_new_user()
 RETURNS TRIGGER AS $$
 BEGIN
-  INSERT INTO public.profiles (id, name, organization, role)
+  INSERT INTO public.profiles (id, name, email, organization, role)
   VALUES (
     NEW.id::text, 
     COALESCE(NEW.raw_user_meta_data->>'name', NEW.email),
+    NEW.email,
     COALESCE(NEW.raw_user_meta_data->>'organization', 'Unknown'),
     COALESCE(NEW.raw_user_meta_data->>'role', 'SUPPLIER')
   )
-  ON CONFLICT (id) DO NOTHING;
+  ON CONFLICT (id) DO UPDATE SET
+    email = EXCLUDED.email,
+    name = COALESCE(EXCLUDED.name, profiles.name),
+    organization = COALESCE(EXCLUDED.organization, profiles.organization),
+    role = COALESCE(EXCLUDED.role, profiles.role);
   RETURN NEW;
 EXCEPTION WHEN OTHERS THEN
   -- Extremely important: prevent signup failure if profile creation fails
@@ -66,15 +76,19 @@ CREATE POLICY "Users can view their own profile" ON public.profiles
     FOR SELECT USING (auth.uid()::text = id);
 
 CREATE POLICY "IQA can view all profiles" ON public.profiles
-    FOR SELECT USING ((auth.jwt() -> 'user_metadata' ->> 'role') = 'IQA');
+    FOR SELECT USING (
+        (auth.jwt() -> 'user_metadata' ->> 'role') = 'IQA'
+        OR (auth.jwt() -> 'user_metadata' ->> 'role') = 'EMPLOYEE'
+    );
 
 CREATE POLICY "Users can update own profile or IQA can update all" ON public.profiles
     FOR UPDATE USING (
         -- Condition A: The user owns the profile
         auth.uid()::text = id 
         OR 
-        -- Condition B: The user is an IQA
+        -- Condition B: The user is an IQA or EMPLOYEE
         (auth.jwt() -> 'user_metadata' ->> 'role') = 'IQA'
+        OR (auth.jwt() -> 'user_metadata' ->> 'role') = 'EMPLOYEE'
     );    
 
 -- 7. RLS Policies for fai table
@@ -86,6 +100,7 @@ CREATE POLICY "Users can view their own submissions" ON public.fai
 CREATE POLICY "IQA can view all submissions" ON public.fai
     FOR SELECT USING (
         (auth.jwt() -> 'user_metadata' ->> 'role') = 'IQA'
+        OR (auth.jwt() -> 'user_metadata' ->> 'role') = 'EMPLOYEE'
     );
 
 CREATE POLICY "Users can insert submissions" ON public.fai
@@ -97,6 +112,7 @@ CREATE POLICY "Users can update their own submissions" ON public.fai
 CREATE POLICY "IQA can update any submission" ON public.fai
     FOR UPDATE USING (
         (auth.jwt() -> 'user_metadata' ->> 'role') = 'IQA'
+        OR (auth.jwt() -> 'user_metadata' ->> 'role') = 'EMPLOYEE'
     );
 
 -- 8. Grants
@@ -106,6 +122,17 @@ GRANT SELECT, INSERT, UPDATE ON public.profiles TO authenticated;
 GRANT SELECT, INSERT, UPDATE ON public.fai TO authenticated;
 GRANT ALL ON public.profiles TO service_role;
 GRANT ALL ON public.fai TO service_role;
+
+-- 8.5 Populate existing users into profiles
+INSERT INTO public.profiles (id, name, email, organization, role)
+SELECT 
+    id::text,
+    COALESCE(raw_user_meta_data->>'name', email),
+    email,
+    COALESCE(raw_user_meta_data->>'organization', 'Unknown'),
+    COALESCE(raw_user_meta_data->>'role', 'SUPPLIER')
+FROM auth.users
+ON CONFLICT (id) DO NOTHING;
 
 -- 9. Storage Setup
 -- Create the bucket if it doesn't exist
@@ -122,13 +149,21 @@ CREATE POLICY "Folder Isolation Select" ON storage.objects FOR SELECT USING (
     AND (
         (storage.foldername(name))[1] = auth.uid()::text
         OR (auth.jwt() -> 'user_metadata' ->> 'role') = 'IQA'
+        OR (auth.jwt() -> 'user_metadata' ->> 'role') = 'EMPLOYEE'
     )
 );
 
--- Allow authenticated users to upload files to their own folder
+-- Allow authenticated users to upload files to their own folder with size limit enforcement
 CREATE POLICY "Folder Isolation Insert" ON storage.objects FOR INSERT WITH CHECK (
     bucket_id = 'fai-artifacts' 
     AND (storage.foldername(name))[1] = auth.uid()::text
+    AND (
+        (metadata->>'size')::bigint <= (
+            SELECT max_upload_size 
+            FROM public.profiles 
+            WHERE id = auth.uid()::text
+        )
+    )
 );
 
 -- Allow users to update their own uploads

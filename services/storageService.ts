@@ -15,17 +15,22 @@ export const uploadFile = async (file: File, path: string) => {
     throw error;
   }
 
-  // Get public URL
-  const { data: { publicUrl } } = supabase.storage
-    .from(BUCKET_NAME)
-    .getPublicUrl(path);
-
-  return { path: data.path, url: publicUrl };
+  return { path: data.path };
 };
 
-export const getFileUrl = (path: string) => {
-  const { data: { publicUrl } } = supabase.storage
+export const getFileUrl = async (path: string, expiresIn: number = 3600) => {
+  const { data, error } = await supabase.storage
     .from(BUCKET_NAME)
-    .getPublicUrl(path);
-  return publicUrl;
+    .createSignedUrl(path, expiresIn);
+  
+  if (error) {
+    console.error('Error creating signed URL:', error);
+    // Fallback to public URL if signed URL fails (maybe it's public)
+    const { data: { publicUrl } } = supabase.storage
+      .from(BUCKET_NAME)
+      .getPublicUrl(path);
+    return publicUrl;
+  }
+  
+  return data.signedUrl;
 };

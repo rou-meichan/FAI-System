@@ -12,9 +12,9 @@ import RegistrationPage from './components/RegistrationPage';
 import { FAISubmission, SubmissionStatus, User, SupplierAccount, EmployeeAccount, FAIFile } from './types';
 import { analyzeFAISubmission } from './services/geminiService';
 import authService from './services/authService';
-import { fetchFAISubmissions, insertFAISubmission, updateFAISubmission } from './services/faiService';
+import { fetchFAISubmissions, insertFAISubmission, updateFAISubmission, fetchAllProfiles, updateProfile } from './services/faiService';
 
-type ViewType = 'DASHBOARD' | 'PROFILE' | 'SUPPLIERS' | 'FAI_REQUESTS' | 'REGISTER_SUPPLIER' | 'REGISTER_EMPLOYEE';
+type ViewType = 'DASHBOARD' | 'PROFILE' | 'SUPPLIERS' | 'FAI_REQUESTS' | 'REGISTER_SUPPLIER' | 'REGISTER_IQA';
 
 const App: React.FC = () => {
   const [user, setUser] = useState<User | null>(null);
@@ -37,8 +37,6 @@ const App: React.FC = () => {
       try {
         const session = await authService.getSession();
         if (session?.user) {
-          // In a real app, we'd fetch the full user profile from a 'profiles' table
-          // For now, we'll reconstruct the user object from metadata or defaults
           const userRole = session.user.user_metadata?.role || 'SUPPLIER';
           setUser({
             id: session.user.id,
@@ -46,6 +44,7 @@ const App: React.FC = () => {
             email: session.user.email || '',
             role: userRole,
             organization: session.user.user_metadata?.organization || (userRole === 'SUPPLIER' ? 'Unknown Supplier' : 'IQA Dept'),
+            createdDate: new Date(session.user.created_at).getTime(),
             gender: session.user.user_metadata?.gender,
             date_of_birth: session.user.user_metadata?.date_of_birth,
             phone_number: session.user.user_metadata?.phone_number
@@ -63,125 +62,57 @@ const App: React.FC = () => {
       if (!user) return;
       
       try {
+        // Load Submissions
         const data = await fetchFAISubmissions();
         if (data && data.length > 0) {
-          // Map Supabase data back to our FAISubmission type if necessary
-          // Assuming the structure matches or is stored in a way that's compatible
           setSubmissions(data as FAISubmission[]);
-        } else {
-          // Fallback to dummy data if no data in DB yet
-          const dummySubmissions: FAISubmission[] = [
-            // ... (keeping dummy data as fallback for now)
-      {
-        id: 'SUB-10025',
-        supplierName: 'ABC Manufacturing',
-        partNumber: 'MOD-441-B',
-        revision: '02',
-        timestamp: Date.now() - 3600000 * 2,
-        status: SubmissionStatus.PENDING_REVIEW,
-        files: [
-          { id: 'f1', type: 'Engineering Drawing' as any, name: 'DWG-441B.pdf', mimeType: 'application/pdf', lastModified: Date.now(), isMandatory: true },
-          { id: 'f2', type: 'FAI Report (Supplier)' as any, name: 'FAI_Report_441B.xlsx', mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', lastModified: Date.now(), isMandatory: true }
-        ],
-        aiAnalysis: {
-          overallVerdict: 'APPROVED',
-          summary: 'Critical dimensions on Engineering Drawing match FAI data points. CPK > 1.33.',
-          details: [
-            { docType: 'Engineering Drawing' as any, result: 'PASS', notes: 'Features correctly ballooned' },
-            { docType: 'FAI Report (Supplier)' as any, result: 'PASS', notes: 'All dimensions within 20% of center' }
-          ]
         }
-      },
-      {
-        id: 'SUB-10026',
-        supplierName: 'Tech Components Ltd.',
-        partNumber: 'CPU-V1-XT',
-        revision: '01',
-        timestamp: Date.now() - 3600000 * 5,
-        status: SubmissionStatus.APPROVED,
-        iqaRemarks: 'Excellent submission. Material certification is clear and dimensions are well within tolerance limits.',
-        files: [
-           { id: 'f3', type: 'Engineering Drawing' as any, name: 'CPU-V1.pdf', mimeType: 'application/pdf', lastModified: Date.now(), isMandatory: true, size: 1240000 },
-           { id: 'f4', type: 'Material Certification & CoC' as any, name: 'MAT_CERT_001.pdf', mimeType: 'application/pdf', lastModified: Date.now(), isMandatory: true, size: 850000 }
-        ],
-        aiAnalysis: {
-          overallVerdict: 'APPROVED',
-          summary: 'Full documentation set provided. Batch numbers match material certificate.',
-          details: [{ docType: 'Material Certification & CoC' as any, result: 'PASS', notes: 'Verified authentic' }]
-        }
-      },
-      {
-        id: 'SUB-10028',
-        supplierName: 'Tech Components Ltd.',
-        partNumber: 'PSU-750W',
-        revision: 'C',
-        timestamp: Date.now() - 86400000 * 1.5,
-        status: SubmissionStatus.REJECTED,
-        iqaRemarks: 'Missing REACH compliance document. Dimension 4.2 in the FAI report exceeds drawing tolerance by 0.05mm. Please revise and resubmit.',
-        files: [
-          { id: 'f5', type: 'Engineering Drawing' as any, name: 'PSU_DRAWING.png', mimeType: 'image/png', lastModified: Date.now(), isMandatory: true, size: 2400000 },
-          { id: 'f6', type: 'FAI Report (Supplier)' as any, name: 'DATA.xlsx', mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', lastModified: Date.now(), isMandatory: true, size: 450000 }
-        ],
-        aiAnalysis: {
-          overallVerdict: 'REJECTED',
-          summary: 'Mandatory environmental documents missing. Potential out of spec dimension identified.',
-          details: [{ docType: 'REACH Compliance' as any, result: 'FAIL', notes: 'Artifact not found' }]
-        }
-      },
-      {
-        id: 'SUB-10029',
-        supplierName: 'ABC Manufacturing',
-        partNumber: 'BRACKET-X',
-        revision: '03',
-        timestamp: Date.now() - 86400000 * 2,
-        status: SubmissionStatus.APPROVED,
-        iqaRemarks: 'Dimensions verified. Cleanliness report meets the new ISO requirements. Approved for production.',
-        files: [],
-        aiAnalysis: {
-          overallVerdict: 'APPROVED',
-          summary: 'Simple geometry verified against master drawing.',
-          details: [{ docType: 'Engineering Drawing' as any, result: 'PASS', notes: 'Features verified' }]
-        }
-      },
-      {
-        id: 'SUB-10030',
-        supplierName: 'Tech Components Ltd.',
-        partNumber: 'SENSOR-H',
-        revision: 'A2',
-        timestamp: Date.now() - 86400000 * 3,
-        status: SubmissionStatus.PENDING_REVIEW,
-        files: [],
-        aiAnalysis: {
-          overallVerdict: 'APPROVED',
-          summary: 'Calibration data looks accurate. Suggest approval.',
-          details: [{ docType: 'FAI Report (Supplier)' as any, result: 'PASS', notes: 'Data points aligned' }]
-        }
-      }
-    ];
 
-    const dummySuppliers: SupplierAccount[] = [
-      { id: 'S1', name: 'John Supplier', organization: 'ABC Manufacturing', email: 'admin@abcmfg.com', status: 'ACTIVE', createdDate: Date.now() - 86400000 * 60 },
-      { id: 'S2', name: 'Alice Tech', organization: 'Tech Components Ltd.', email: 'alice@techcomp.com', status: 'ACTIVE', createdDate: Date.now() - 86400000 * 55 }
-    ];
+        // Load Profiles if IQA
+        if (user.role === 'IQA') {
+          const allProfiles = await fetchAllProfiles();
+          
+          const supplierProfiles = allProfiles
+            .filter(p => p.role === 'SUPPLIER')
+            .map(p => ({
+              id: p.id,
+              name: p.name || 'Unknown',
+              email: p.email || 'N/A',
+              organization: p.organization || 'Unknown',
+              status: 'ACTIVE' as const,
+              createdDate: new Date(p.created_at).getTime(),
+              gender: p.gender,
+              date_of_birth: p.date_of_birth,
+              phone_number: p.phone_number
+            }));
+          setSuppliers(supplierProfiles);
 
-    const dummyEmployees: EmployeeAccount[] = [
-      { id: 'E1', name: 'Sarah Inspector', email: 'inspector@iqa.gov', role: 'IQA Lead', status: 'ACTIVE', createdDate: Date.now() - 86400000 * 60 }
-    ];
-
-    setSubmissions(dummySubmissions);
-    setSuppliers(dummySuppliers);
-    setEmployees(dummyEmployees);
+          const employeeProfiles = allProfiles
+            .filter(p => p.role === 'IQA' && p.id !== user.id)
+            .map(p => ({
+              id: p.id,
+              name: p.name || 'Unknown',
+              email: p.email || 'N/A',
+              role: 'IQA Inspector',
+              organization: p.organization || 'Unknown',
+              status: 'ACTIVE' as const,
+              createdDate: new Date(p.created_at).getTime(),
+              gender: p.gender,
+              date_of_birth: p.date_of_birth,
+              phone_number: p.phone_number
+            }));
+          setEmployees(employeeProfiles);
         }
       } catch (err) {
-        console.error('Failed to load data:', err);
+        console.error('Data load failed:', err);
       }
     };
-
-    if (user) {
-      loadData();
-    }
+    loadData();
   }, [user]);
 
+  const handleLogin = (loggedInUser: User) => {
+    setUser(loggedInUser);
+  };
 
   const runAnalysis = async (id: string, sub: FAISubmission) => {
     setSubmissions(prev => prev.map(s => s.id === id ? { ...s, status: SubmissionStatus.AI_REVIEWING } : s));
@@ -305,19 +236,52 @@ const App: React.FC = () => {
 
     switch (currentView) {
       case 'PROFILE':
-        return <ProfilePage user={user} onBack={() => handleViewChange('DASHBOARD')} />;
+        return <ProfilePage user={user} onBack={() => handleViewChange('DASHBOARD')} onUpdate={(updates) => setUser(prev => prev ? { ...prev, ...updates } : null)} />;
       case 'REGISTER_SUPPLIER':
         return <RegistrationPage type="SUPPLIER" onBack={() => handleViewChange('SUPPLIERS')} onSubmit={(data) => { setSuppliers(prev => [...prev, { ...data, id: `S-${Date.now()}`, createdDate: Date.now(), status: 'ACTIVE' }]); handleViewChange('SUPPLIERS'); }} />;
-      case 'REGISTER_EMPLOYEE':
-        return <RegistrationPage type="EMPLOYEE" onBack={() => handleViewChange('SUPPLIERS')} onSubmit={(data) => { setEmployees(prev => [...prev, { ...data, id: `E-${Date.now()}`, createdDate: Date.now(), status: 'ACTIVE' }]); handleViewChange('SUPPLIERS'); }} />;
+      case 'REGISTER_IQA':
+        return <RegistrationPage type="IQA" onBack={() => handleViewChange('SUPPLIERS')} onSubmit={(data) => { setEmployees(prev => [...prev, { ...data, id: `E-${Date.now()}`, createdDate: Date.now(), status: 'ACTIVE' }]); handleViewChange('SUPPLIERS'); }} />;
       case 'SUPPLIERS':
         if (selectedManagedSupplier) {
-          return <SupplierDetail supplier={selectedManagedSupplier} submissions={submissions} initialEditMode={isManagedEditMode} onBack={() => { setSelectedManagedSupplierId(null); setIsManagedEditMode(false); }} onToggleStatus={(id) => setSuppliers(prev => prev.map(s => s.id === id ? { ...s, status: s.status === 'ACTIVE' ? 'DEACTIVATED' : 'ACTIVE' as any } : s))} onUpdate={(id, updates) => setSuppliers(prev => prev.map(s => s.id === id ? { ...s, ...updates } : s))} onDelete={(id) => { setSuppliers(prev => prev.filter(s => s.id !== id)); setSelectedManagedSupplierId(null); }} />;
+          return (
+            <SupplierDetail 
+              supplier={selectedManagedSupplier} 
+              submissions={submissions} 
+              initialEditMode={isManagedEditMode} 
+              onBack={() => { setSelectedManagedSupplierId(null); setIsManagedEditMode(false); }} 
+              onToggleStatus={(id) => setSuppliers(prev => prev.map(s => s.id === id ? { ...s, status: s.status === 'ACTIVE' ? 'DEACTIVATED' : 'ACTIVE' as any } : s))} 
+              onUpdate={async (id, updates) => {
+                setSuppliers(prev => prev.map(s => s.id === id ? { ...s, ...updates } : s));
+                try {
+                  await updateProfile(id, updates);
+                } catch (err) {
+                  console.error('Failed to update supplier profile:', err);
+                }
+              }} 
+              onDelete={(id) => { setSuppliers(prev => prev.filter(s => s.id !== id)); setSelectedManagedSupplierId(null); }}
+              onViewSubmission={(id) => setSelectedSubmissionId(id)}
+            />
+          );
         }
         if (selectedEmployee) {
-          return <EmployeeDetail employee={selectedEmployee} initialEditMode={isManagedEditMode} onBack={() => { setSelectedEmployeeId(null); setIsManagedEditMode(false); }} onToggleStatus={(id) => setEmployees(prev => prev.map(e => e.id === id ? { ...e, status: e.status === 'ACTIVE' ? 'DEACTIVATED' : 'ACTIVE' as any } : e))} onUpdate={(id, updates) => setEmployees(prev => prev.map(e => e.id === id ? { ...e, ...updates } : e))} />;
+          return (
+            <EmployeeDetail 
+              employee={selectedEmployee} 
+              initialEditMode={isManagedEditMode} 
+              onBack={() => { setSelectedEmployeeId(null); setIsManagedEditMode(false); }} 
+              onToggleStatus={(id) => setEmployees(prev => prev.map(e => e.id === id ? { ...e, status: e.status === 'ACTIVE' ? 'DEACTIVATED' : 'ACTIVE' as any } : e))} 
+              onUpdate={async (id, updates) => {
+                setEmployees(prev => prev.map(e => e.id === id ? { ...e, ...updates } : e));
+                try {
+                  await updateProfile(id, updates);
+                } catch (err) {
+                  console.error('Failed to update employee profile:', err);
+                }
+              }} 
+            />
+          );
         }
-        return <AccountManagement activeTab={mgmtActiveTab} onTabChange={setMgmtActiveTab} suppliers={suppliers} employees={employees} onRegisterRequest={(tab) => handleViewChange(tab === 'SUPPLIERS' ? 'REGISTER_SUPPLIER' : 'REGISTER_EMPLOYEE')} onDeleteSupplier={(id) => setSuppliers(prev => prev.filter(s => s.id !== id))} onToggleSupplierStatus={(id) => setSuppliers(prev => prev.map(s => s.id === id ? { ...s, status: s.status === 'ACTIVE' ? 'DEACTIVATED' : 'ACTIVE' as any } : s))} onUpdateSupplier={(id, updates) => setSuppliers(prev => prev.map(s => s.id === id ? { ...s, ...updates } : s))} onDeleteEmployee={(id) => setEmployees(prev => prev.filter(e => e.id !== id))} onToggleEmployeeStatus={(id) => setEmployees(prev => prev.map(e => e.id === id ? { ...e, status: e.status === 'ACTIVE' ? 'DEACTIVATED' : 'ACTIVE' as any } : e))} onUpdateEmployee={(id, updates) => setEmployees(prev => prev.map(e => e.id === id ? { ...e, ...updates } : e))} onViewSupplierDetail={(id) => { setSelectedManagedSupplierId(id); setIsManagedEditMode(false); }} onEditSupplierDetail={(id) => { setSelectedManagedSupplierId(id); setIsManagedEditMode(true); }} onViewEmployeeDetail={(id) => { setSelectedEmployeeId(id); setIsManagedEditMode(false); }} onEditEmployeeDetail={(id) => { setSelectedEmployeeId(id); setIsManagedEditMode(true); }} onBack={() => handleViewChange('DASHBOARD')} />;
+        return <AccountManagement activeTab={mgmtActiveTab} onTabChange={setMgmtActiveTab} suppliers={suppliers} employees={employees} onRegisterRequest={(tab) => handleViewChange(tab === 'SUPPLIERS' ? 'REGISTER_SUPPLIER' : 'REGISTER_IQA')} onDeleteSupplier={(id) => setSuppliers(prev => prev.filter(s => s.id !== id))} onToggleSupplierStatus={(id) => setSuppliers(prev => prev.map(s => s.id === id ? { ...s, status: s.status === 'ACTIVE' ? 'DEACTIVATED' : 'ACTIVE' as any } : s))} onUpdateSupplier={(id, updates) => setSuppliers(prev => prev.map(s => s.id === id ? { ...s, ...updates } : s))} onDeleteEmployee={(id) => setEmployees(prev => prev.filter(e => e.id !== id))} onToggleEmployeeStatus={(id) => setEmployees(prev => prev.map(e => e.id === id ? { ...e, status: e.status === 'ACTIVE' ? 'DEACTIVATED' : 'ACTIVE' as any } : e))} onUpdateEmployee={(id, updates) => setEmployees(prev => prev.map(e => e.id === id ? { ...e, ...updates } : e))} onViewSupplierDetail={(id) => { setSelectedManagedSupplierId(id); setIsManagedEditMode(false); }} onEditSupplierDetail={(id) => { setSelectedManagedSupplierId(id); setIsManagedEditMode(true); }} onViewEmployeeDetail={(id) => { setSelectedEmployeeId(id); setIsManagedEditMode(false); }} onEditEmployeeDetail={(id) => { setSelectedEmployeeId(id); setIsManagedEditMode(true); }} onBack={() => handleViewChange('DASHBOARD')} />;
       case 'FAI_REQUESTS':
         return <div className="space-y-8"><header className="space-y-1"><h1 className="text-xl md:text-2xl font-black text-slate-900 tracking-tight uppercase leading-none">FAI Request Ledger</h1><p className="text-slate-500 font-medium text-[10px] md:text-xs mt-1">Detailed tracking and management of all active First Article Inspections.</p></header><IQADashboard submissions={submissions} onViewDetail={(id) => setSelectedSubmissionId(id)} onManageSuppliers={() => handleViewChange('SUPPLIERS')} viewMode="TABLE_ONLY" /></div>;
       default:

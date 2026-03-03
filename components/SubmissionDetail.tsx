@@ -4,7 +4,8 @@ import { StatusBadge } from './IQADashboard';
 import { DOCUMENT_CONFIG } from '../constants';
 import PDFPreview from './PDFPreview';
 import { base64ToBlob } from '../src/utils/fileUtils';
-import { uploadFile } from '../services/storageService';
+import { uploadFile, getFileUrl } from '../services/storageService';
+import { fetchProfile } from '../services/faiService';
 
 interface SubmissionDetailProps {
   submission: FAISubmission;
@@ -16,6 +17,26 @@ interface SubmissionDetailProps {
 }
 
 const FilePreviewModal: React.FC<{ file: FAIFile; onClose: () => void }> = ({ file, onClose }) => {
+  const [signedUrl, setSignedUrl] = useState<string | null>(file.url || null);
+  const [isLoading, setIsLoading] = useState(!file.url && !!file.storagePath);
+
+  useEffect(() => {
+    const fetchUrl = async () => {
+      if (!file.url && file.storagePath) {
+        setIsLoading(true);
+        try {
+          const url = await getFileUrl(file.storagePath);
+          setSignedUrl(url);
+        } catch (error) {
+          console.error('Failed to fetch signed URL:', error);
+        } finally {
+          setIsLoading(false);
+        }
+      }
+    };
+    fetchUrl();
+  }, [file]);
+
   return (
     <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-[200] flex items-center justify-center p-2 md:p-10 animate-in fade-in duration-300">
       <div className="bg-white w-full max-w-5xl h-full max-h-[95vh] md:max-h-[90vh] rounded-[1.5rem] md:rounded-[2rem] shadow-2xl flex flex-col overflow-hidden animate-in zoom-in-95 duration-300 border border-slate-200">
@@ -42,19 +63,28 @@ const FilePreviewModal: React.FC<{ file: FAIFile; onClose: () => void }> = ({ fi
         </div>
 
         <div className="flex-1 bg-slate-50 flex items-center justify-center p-2 md:p-4 overflow-auto">
-          {file.url || file.data ? (
+          {isLoading ? (
+            <div className="text-center space-y-3">
+              <div className="w-12 h-12 bg-indigo-50 text-indigo-600 rounded-full flex items-center justify-center mx-auto animate-spin">
+                <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                </svg>
+              </div>
+              <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Authenticating Access...</p>
+            </div>
+          ) : signedUrl || file.data ? (
             file.mimeType === 'application/pdf' ? (
               <PDFPreview 
-                data={file.url || file.data!} 
+                data={signedUrl || file.data!} 
                 title={file.name}
                 className="w-full h-full rounded-lg md:rounded-xl shadow-inner border border-slate-200 bg-white"
               />
             ) : (
-              <img src={file.url || file.data} alt={file.name} className="max-w-full max-h-full object-contain shadow-xl rounded-lg md:rounded-xl" />
+              <img src={signedUrl || file.data} alt={file.name} className="max-w-full max-h-full object-contain shadow-xl rounded-lg md:rounded-xl" />
             )
           ) : (
             <div className="text-center p-10 bg-white rounded-3xl border border-slate-200 mx-4">
-              <p className="text-slate-400 font-bold italic text-xs md:text-sm">Preview simulation unavailable for this record.</p>
+              <p className="text-slate-400 font-bold italic text-xs md:text-sm">Preview unavailable for this record.</p>
             </div>
           )}
         </div>
@@ -76,6 +106,22 @@ const SubmissionDetail: React.FC<SubmissionDetailProps> = ({
   const [editableFiles, setEditableFiles] = useState<FAIFile[]>(submission.files);
   const [actualFiles, setActualFiles] = useState<Record<string, File>>({}); // Store actual File objects for new uploads
   const [isResubmitting, setIsResubmitting] = useState(false);
+  const [maxUploadSize, setMaxUploadSize] = useState<number>(2 * 1024 * 1024);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const loadProfile = async () => {
+      try {
+        const profile = await fetchProfile(userId);
+        if (profile?.max_upload_size) {
+          setMaxUploadSize(profile.max_upload_size);
+        }
+      } catch (error) {
+        console.error('Failed to load profile:', error);
+      }
+    };
+    loadProfile();
+  }, [userId]);
 
   useEffect(() => {
     setEditableFiles(submission.files);
@@ -145,6 +191,13 @@ const SubmissionDetail: React.FC<SubmissionDetailProps> = ({
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>, type: DocType) => {
     const file = e.target.files?.[0];
     if (file) {
+      setUploadError(null);
+      if (file.size > maxUploadSize) {
+        const limitMB = (maxUploadSize / (1024 * 1024)).toFixed(0);
+        setUploadError(`File exceeds your ${limitMB}MB limit. Please contact the IQA team for an increase.`);
+        return;
+      }
+
       const fileId = Math.random().toString(36).substr(2, 9);
       const reader = new FileReader();
       reader.onload = (event) => {
@@ -184,7 +237,8 @@ const SubmissionDetail: React.FC<SubmissionDetailProps> = ({
           const actualFile = actualFiles[fileInfo.id];
           if (actualFile) {
             const storagePath = `${userId}/${submission.id}/${fileInfo.id}_${fileInfo.name}`;
-            const { path, url } = await uploadFile(actualFile, storagePath);
+            const { path } = await uploadFile(actualFile, storagePath);
+            const url = await getFileUrl(path);
             return {
               ...fileInfo,
               storagePath: path,
@@ -246,6 +300,11 @@ const SubmissionDetail: React.FC<SubmissionDetailProps> = ({
           <div className="w-1.5 h-4 bg-indigo-600 rounded-full"></div>
           <h3 className="text-sm md:text-base font-black text-slate-900 uppercase tracking-widest">Digital Artifacts</h3>
         </div>
+        {uploadError && (
+          <div className="px-3 py-1 bg-rose-50 border border-rose-100 rounded-lg text-[9px] font-bold text-rose-600 uppercase tracking-tight animate-in fade-in slide-in-from-right-2">
+            {uploadError}
+          </div>
+        )}
       </div>
       
       <div className={`flex-1 ${isSupplier ? 'grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5' : 'space-y-2 overflow-y-auto max-h-[350px] pr-2'} [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-slate-200 [&::-webkit-scrollbar-thumb]:rounded-full hover:[&::-webkit-scrollbar-thumb]:bg-slate-300`}>

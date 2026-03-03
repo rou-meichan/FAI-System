@@ -34,6 +34,27 @@ async function startServer() {
       });
 
       if (error) throw error;
+
+      // Upsert into profiles table to store extended metadata
+      // The trigger on auth.users might have already created a basic profile
+      const { error: profileError } = await supabaseAdmin
+        .from('profiles')
+        .upsert([{
+          id: data.user.id,
+          name: metadata.name,
+          email: email,
+          role: metadata.role,
+          organization: metadata.organization,
+          gender: metadata.gender,
+          date_of_birth: metadata.date_of_birth,
+          phone_number: metadata.phone_number,
+          status: 'ACTIVE'
+        }], { onConflict: 'id' });
+
+      if (profileError) {
+        console.error('Profile creation error:', profileError);
+      }
+
       res.json({ success: true, user: data.user });
     } catch (error: any) {
       console.error('Admin registration error:', error);
