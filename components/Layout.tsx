@@ -76,7 +76,7 @@ const Layout: React.FC<LayoutProps> = ({
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
             </div>
-            <span className="hidden sm:inline-block font-black text-slate-900 tracking-tight text-lg">FAI Agent</span>
+            <span className="font-black text-slate-900 tracking-tight text-base sm:text-lg">FAI Agent</span>
           </div>
         </div>
 
@@ -214,7 +214,7 @@ const Layout: React.FC<LayoutProps> = ({
       )}
 
       {/* Main Content Area */}
-      <main className="flex-1 p-4 sm:p-6 lg:p-8 overflow-x-hidden">
+      <main className="flex-1 p-4 sm:p-6 lg:p-8">
         <div className="max-w-7xl mx-auto">
           {children}
         </div>

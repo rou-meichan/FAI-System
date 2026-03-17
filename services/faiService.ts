@@ -5,9 +5,23 @@ import { supabase } from './supabase';
 export const insertFAISubmission = async (submissionData: any) => {
     // Clean up undefined values and strip large base64 data from files
     const cleanData = { ...submissionData };
+    delete cleanData.supplierName;
+    delete cleanData.profiles;
+
+    // Ensure user_id is present for RLS
+    if (!cleanData.user_id) {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
+            cleanData.user_id = user.id;
+        } else {
+            console.error("User not authenticated, cannot insert submission");
+            throw new Error("User not authenticated");
+        }
+    }
+
     if (cleanData.files && Array.isArray(cleanData.files)) {
         cleanData.files = cleanData.files.map((f: any) => {
-            const { data, ...rest } = f;
+            const { data, url, ...rest } = f;
             return rest;
         });
     }
@@ -17,6 +31,7 @@ export const insertFAISubmission = async (submissionData: any) => {
     );
 
     console.log('Attempting Supabase Insert with data (stripped):', filteredData);
+    console.log('User ID for insert:', cleanData.user_id);
     const { data, error } = await supabase
         .from('fai')
         .insert([filteredData])
@@ -30,7 +45,7 @@ export const insertFAISubmission = async (submissionData: any) => {
 
 // Fetch function for FAI submissions
 export const fetchFAISubmissions = async (userId?: string) => {
-    let query = supabase.from('fai').select('*');
+    let query = supabase.from('fai').select('*, profiles(organization)');
     if (userId) {
         query = query.eq('user_id', userId);
     }
@@ -39,16 +54,22 @@ export const fetchFAISubmissions = async (userId?: string) => {
         console.error('Supabase Fetch Error:', error);
         throw error;
     }
-    return data;
+    // Map profiles.organization to supplierName for UI compatibility
+    return data.map((item: any) => ({
+        ...item,
+        supplierName: item.profiles?.organization || 'Unknown Entity'
+    }));
 };
 
 // Update function for FAI submissions
 export const updateFAISubmission = async (id: string, updatedData: any) => {
     // Clean up undefined values and strip base64 data
     const cleanData = { ...updatedData };
+    delete cleanData.supplierName;
+    delete cleanData.profiles;
     if (cleanData.files && Array.isArray(cleanData.files)) {
         cleanData.files = cleanData.files.map((f: any) => {
-            const { data, ...rest } = f;
+            const { data, url, ...rest } = f;
             return rest;
         });
     }

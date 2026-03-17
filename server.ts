@@ -2,18 +2,37 @@ import express from "express";
 import { createServer as createViteServer } from "vite";
 import { createClient } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
+import path from 'path';
+import fs from 'fs';
 
 dotenv.config();
 
-const supabaseUrl = process.env.VITE_SUPABASE_URL!;
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
+let supabaseAdmin: any = null;
 
-const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey, {
-  auth: {
-    autoRefreshToken: false,
-    persistSession: false
+function getSupabaseAdmin() {
+  if (supabaseAdmin) return supabaseAdmin;
+
+  const supabaseUrl = process.env.VITE_SUPABASE_URL;
+  const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+  if (!supabaseUrl || !supabaseServiceKey) {
+    console.error('MISSING SUPABASE ENVIRONMENT VARIABLES');
+    return null;
   }
-});
+
+  try {
+    supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey, {
+      auth: {
+        autoRefreshToken: false,
+        persistSession: false
+      }
+    });
+    return supabaseAdmin;
+  } catch (err) {
+    console.error('Failed to initialize Supabase Admin:', err);
+    return null;
+  }
+}
 
 async function startServer() {
   const app = express();
@@ -21,23 +40,54 @@ async function startServer() {
 
   app.use(express.json());
 
+  // Health check
+  app.get("/api/health", (req, res) => {
+    res.json({ status: "ok", env: process.env.NODE_ENV });
+  });
+
+  // API Route to check if email exists
+  app.post("/api/check-email", async (req, res) => {
+    const { email } = req.body;
+    const admin = getSupabaseAdmin();
+    if (!admin) {
+      return res.status(500).json({ success: false, error: 'Database connection not configured' });
+    }
+    try {
+      const { data, error } = await admin
+        .from('profiles')
+        .select('email')
+        .eq('email', email)
+        .single();
+      
+      if (error && error.code !== 'PGRST116') {
+        throw error;
+      }
+      
+      res.json({ exists: !!data });
+    } catch (error: any) {
+      console.error('Check email error:', error);
+      res.status(400).json({ success: false, error: error.message });
+    }
+  });
+
   // API Route for Admin Registration
   app.post("/api/register", async (req, res) => {
-    const { email, password, metadata } = req.body;
+    const { email, metadata, redirectTo } = req.body;
+    const admin = getSupabaseAdmin();
+    if (!admin) {
+      return res.status(500).json({ success: false, error: 'Database connection not configured' });
+    }
 
     try {
-      const { data, error } = await supabaseAdmin.auth.admin.createUser({
-        email,
-        password,
-        user_metadata: metadata,
-        email_confirm: true // Auto-confirm for admin-created accounts
+      const { data, error } = await admin.auth.admin.inviteUserByEmail(email, {
+        data: metadata,
+        redirectTo: redirectTo
       });
 
       if (error) throw error;
 
       // Upsert into profiles table to store extended metadata
-      // The trigger on auth.users might have already created a basic profile
-      const { error: profileError } = await supabaseAdmin
+      const { error: profileError } = await admin
         .from('profiles')
         .upsert([{
           id: data.user.id,
@@ -45,10 +95,9 @@ async function startServer() {
           email: email,
           role: metadata.role,
           organization: metadata.organization,
-          gender: metadata.gender,
-          date_of_birth: metadata.date_of_birth,
-          phone_number: metadata.phone_number,
-          status: 'ACTIVE'
+          gender: metadata.gender || null,
+          date_of_birth: metadata.date_of_birth || null,
+          phone_number: metadata.phone_number || null
         }], { onConflict: 'id' });
 
       if (profileError) {
@@ -58,7 +107,8 @@ async function startServer() {
       res.json({ success: true, user: data.user });
     } catch (error: any) {
       console.error('Admin registration error:', error);
-      res.status(400).json({ success: false, error: error.message });
+      const status = error.status === 429 ? 429 : 400;
+      res.status(status).json({ success: false, error: error.message });
     }
   });
 
@@ -77,8 +127,13 @@ async function startServer() {
   }
 
   app.listen(PORT, "0.0.0.0", () => {
-    console.log(`Server running on http://localhost:${PORT}`);
+    console.log(`SERVER_READY: Server running on http://0.0.0.0:${PORT}`);
   });
 }
 
-startServer();
+console.log('BOOTSTRAP: Starting server initialization...');
+startServer().then(() => {
+  console.log('BOOTSTRAP: startServer() promise resolved');
+}).catch(err => {
+  console.error('BOOTSTRAP_ERROR: Failed to start server:', err);
+});

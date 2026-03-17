@@ -13,12 +13,21 @@ const IQADashboard: React.FC<IQADashboardProps> = ({ submissions, onViewDetail, 
   const [currentPage, setCurrentPage] = useState(1);
   const [searchQuery, setSearchQuery] = useState('');
   const [showFilters, setShowFilters] = useState(false);
+  const [sortConfig, setSortConfig] = useState<{ key: keyof FAISubmission; direction: 'asc' | 'desc' } | null>(null);
   
   // Advanced Filters
   const [statusFilter, setStatusFilter] = useState<SubmissionStatus | 'ALL'>('ALL');
   const [supplierFilter, setSupplierFilter] = useState<string>('ALL');
   const [startDate, setStartDate] = useState<string>('');
   const [endDate, setEndDate] = useState<string>('');
+
+  const handleSort = (key: keyof FAISubmission) => {
+    let direction: 'asc' | 'desc' = 'desc';
+    if (sortConfig && sortConfig.key === key && sortConfig.direction === 'desc') {
+      direction = 'asc';
+    }
+    setSortConfig({ key, direction });
+  };
 
   const isFullDashboard = viewMode === 'FULL';
   const itemsPerPage = isFullDashboard ? 5 : 10;
@@ -39,13 +48,16 @@ const IQADashboard: React.FC<IQADashboardProps> = ({ submissions, onViewDetail, 
   const stats = useMemo(() => {
     const now = new Date();
     const thirtyDaysAgo = now.getTime() - (30 * 24 * 60 * 60 * 1000);
-    const recentSubmissions = submissions.filter(s => s.timestamp >= thirtyDaysAgo);
+    const recentSubmissions = submissions.filter(s => {
+      const date = s.lastUpdated ? new Date(s.lastUpdated).getTime() : (s.created_at ? new Date(s.created_at).getTime() : 0);
+      return date >= thirtyDaysAgo;
+    });
     
     const total = recentSubmissions.length;
     const approved = recentSubmissions.filter(s => s.status === SubmissionStatus.APPROVED).length;
     const rejected = recentSubmissions.filter(s => s.status === SubmissionStatus.REJECTED).length;
-    // Wait for Review shows ALL pending reviews regardless of time
-    const pendingReview = submissions.filter(s => s.status === SubmissionStatus.PENDING_REVIEW).length;
+    // Wait for Review shows ALL pending reviews and AI processing regardless of time
+    const pendingReview = submissions.filter(s => s.status === SubmissionStatus.PENDING_REVIEW || s.status === SubmissionStatus.AI_REVIEWING).length;
     
     return { total, approved, rejected, pendingReview };
   }, [submissions]);
@@ -53,20 +65,28 @@ const IQADashboard: React.FC<IQADashboardProps> = ({ submissions, onViewDetail, 
   const tableSubmissions = useMemo(() => {
     let filtered = submissions;
     if (isFullDashboard) {
-      filtered = submissions.filter(s => s.status === SubmissionStatus.PENDING_REVIEW);
+      filtered = submissions.filter(s => s.status === SubmissionStatus.PENDING_REVIEW || s.status === SubmissionStatus.AI_REVIEWING);
     } else {
-      if (statusFilter !== 'ALL') filtered = filtered.filter(s => s.status === statusFilter);
+      if (statusFilter !== 'ALL') {
+        filtered = filtered.filter(s => s.status === statusFilter);
+      }
       if (supplierFilter !== 'ALL') filtered = filtered.filter(s => s.supplierName === supplierFilter);
       if (!isDateRangeInvalid) {
-        if (startDate) filtered = filtered.filter(s => s.timestamp >= new Date(startDate).setHours(0,0,0,0));
-        if (endDate) filtered = filtered.filter(s => s.timestamp <= new Date(endDate).setHours(23,59,59,999));
+        if (startDate) filtered = filtered.filter(s => {
+          const subDate = s.lastUpdated ? new Date(s.lastUpdated).getTime() : (s.created_at ? new Date(s.created_at).getTime() : 0);
+          return subDate >= new Date(startDate).setHours(0,0,0,0);
+        });
+        if (endDate) filtered = filtered.filter(s => {
+          const subDate = s.lastUpdated ? new Date(s.lastUpdated).getTime() : (s.created_at ? new Date(s.created_at).getTime() : 0);
+          return subDate <= new Date(endDate).setHours(23,59,59,999);
+        });
       }
     }
     
     if (searchQuery.trim()) {
       const query = searchQuery.toLowerCase();
       filtered = filtered.filter(s => 
-        s.partNumber.toLowerCase().includes(query) || 
+        s.partName.toLowerCase().includes(query) || 
         s.id.toLowerCase().includes(query) ||
         s.supplierName.toLowerCase().includes(query)
       );
@@ -75,20 +95,37 @@ const IQADashboard: React.FC<IQADashboardProps> = ({ submissions, onViewDetail, 
   }, [submissions, isFullDashboard, searchQuery, statusFilter, supplierFilter, startDate, endDate, isDateRangeInvalid]);
 
   const sortedSubmissions = useMemo(() => {
-    const statusPriority: Record<string, number> = {
-      [SubmissionStatus.PENDING_REVIEW]: 1,
-      [SubmissionStatus.REJECTED]: 2,
-      [SubmissionStatus.APPROVED]: 3,
-      [SubmissionStatus.AI_REVIEWING]: 4,
-      [SubmissionStatus.PENDING_AI]: 5,
-      [SubmissionStatus.DRAFT]: 6,
-    };
     return [...tableSubmissions].sort((a, b) => {
-      const priorityA = statusPriority[a.status] || 99;
-      const priorityB = statusPriority[b.status] || 99;
-      return priorityA !== priorityB ? priorityA - priorityB : b.timestamp - a.timestamp;
+      if (!sortConfig) {
+        const dateA = a.lastUpdated ? new Date(a.lastUpdated).getTime() : (a.created_at ? new Date(a.created_at).getTime() : 0);
+        const dateB = b.lastUpdated ? new Date(b.lastUpdated).getTime() : (b.created_at ? new Date(b.created_at).getTime() : 0);
+        return dateB - dateA;
+      }
+      
+      const { key, direction } = sortConfig;
+      let valA = a[key];
+      let valB = b[key];
+
+      if (key === 'lastUpdated' || key === 'created_at') {
+        valA = a.lastUpdated ? new Date(a.lastUpdated).getTime() : (a.created_at ? new Date(a.created_at).getTime() : 0);
+        valB = b.lastUpdated ? new Date(b.lastUpdated).getTime() : (b.created_at ? new Date(b.created_at).getTime() : 0);
+      }
+
+      if (key === 'status') {
+        const order = [SubmissionStatus.AI_REVIEWING, SubmissionStatus.PENDING_REVIEW, SubmissionStatus.APPROVED, SubmissionStatus.REJECTED, SubmissionStatus.DRAFT];
+        const indexA = order.indexOf(a.status);
+        const indexB = order.indexOf(b.status);
+        if (direction === 'asc') return indexA - indexB;
+        return indexB - indexA;
+      }
+
+      if (valA === undefined || valB === undefined) return 0;
+      
+      if (valA < valB) return direction === 'asc' ? -1 : 1;
+      if (valA > valB) return direction === 'asc' ? 1 : -1;
+      return 0;
     });
-  }, [tableSubmissions]);
+  }, [tableSubmissions, sortConfig]);
 
   const totalPages = Math.max(1, Math.ceil(sortedSubmissions.length / itemsPerPage));
   
@@ -114,7 +151,7 @@ const IQADashboard: React.FC<IQADashboardProps> = ({ submissions, onViewDetail, 
     const data = [
       { name: 'Approved', value: stats.approved, color: '#10b981' },
       { name: 'Rejected', value: stats.rejected, color: '#ef4444' },
-      { name: 'Pending Review', value: stats.pendingReview, color: '#f59e0b' },
+      { name: 'Pending/AI', value: stats.pendingReview, color: '#f59e0b' },
     ];
     // Filter out zero values to prevent visual gaps and "unbalanced" chart rendering
     return data.filter(d => d.value > 0);
@@ -150,7 +187,7 @@ const IQADashboard: React.FC<IQADashboardProps> = ({ submissions, onViewDetail, 
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4">
             {[
               { label: 'Total Packages', value: stats.total, icon: '📦', color: 'indigo', period: '30D' },
-              { label: 'Wait for Review', value: stats.pendingReview, icon: '👤', color: 'amber', period: 'ALL' },
+              { label: 'Pending/AI', value: stats.pendingReview, icon: '👤', color: 'amber', period: 'ALL' },
               { label: 'Approved', value: stats.approved, icon: '✅', color: 'emerald', period: '30D' },
               { label: 'Rejected', value: stats.rejected, icon: '❌', color: 'rose', period: '30D' },
             ].map((kpi, idx) => (
@@ -229,7 +266,7 @@ const IQADashboard: React.FC<IQADashboardProps> = ({ submissions, onViewDetail, 
                   <option value={SubmissionStatus.PENDING_REVIEW}>Needs Review</option>
                   <option value={SubmissionStatus.APPROVED}>Approved</option>
                   <option value={SubmissionStatus.REJECTED}>Rejected</option>
-                  <option value={SubmissionStatus.AI_REVIEWING}>AI Reviewing</option>
+                  <option value={SubmissionStatus.AI_REVIEWING}>AI Processing</option>
                 </select>
               </div>
 
@@ -295,24 +332,30 @@ const IQADashboard: React.FC<IQADashboardProps> = ({ submissions, onViewDetail, 
             </div>
           )}
           
-          <div className="overflow-x-hidden -mx-5 md:-mx-6 lg:overflow-visible">
-            <div className="inline-block min-w-full align-middle px-5 md:px-6">
-              <table className={`w-full text-left border-collapse table-fixed`}>
+          <div className="overflow-x-auto -mx-5 md:-mx-6 lg:overflow-visible">
+            <div className="inline-block w-full align-middle px-5 md:px-6">
+              <table className={`w-full text-left border-collapse table-fixed min-w-[600px] md:min-w-0`}>
                 <thead>
                   <tr className="border-b border-slate-100">
-                    <th className="pb-3 text-[10px] font-black text-slate-400 uppercase tracking-widest pl-4 w-16 md:w-28">ID</th>
-                    <th className="pb-3 text-[10px] font-black text-slate-400 uppercase tracking-widest px-2">Component</th>
-                    <th className="pb-3 text-[10px] font-black text-slate-400 uppercase tracking-widest px-2 hidden md:table-cell w-1/4">Supplier</th>
+                    <th className={`pb-3 text-[10px] font-black text-slate-400 uppercase tracking-widest pl-4 ${!isFullDashboard ? 'w-[13%]' : 'w-[15%]'} cursor-pointer hover:text-indigo-600`} onClick={() => handleSort('id')}>
+                      Part Number
+                      {sortConfig?.key === 'id' ? (sortConfig.direction === 'asc' ? '↑' : '↓') : ''}
+                    </th>
+                    <th className={`pb-3 text-[10px] font-black text-slate-400 uppercase tracking-widest px-2 ${!isFullDashboard ? 'w-[35%]' : 'w-[40%]'} cursor-pointer hover:text-indigo-600`} onClick={() => handleSort('partName')}>Part Name {sortConfig?.key === 'partName' ? (sortConfig.direction === 'asc' ? '↑' : '↓') : ''}</th>
                     {!isFullDashboard && (
-                      <th className="pb-3 text-[10px] font-black text-slate-400 uppercase tracking-widest px-2 w-36 lg:w-44 hidden md:table-cell">Submission Date</th>
+                      <th className={`pb-3 text-[10px] font-black text-slate-400 uppercase tracking-widest px-2 w-[13%] cursor-pointer hover:text-indigo-600`} onClick={() => handleSort('created_at')}>Date {sortConfig?.key === 'created_at' ? (sortConfig.direction === 'asc' ? '↑' : '↓') : ''}</th>
                     )}
-                    <th className="pb-3 text-[10px] font-black text-slate-400 uppercase tracking-widest text-center w-24 md:w-36 pr-4">Status</th>
+                    {!isFullDashboard && (
+                      <th className="pb-3 text-[10px] font-black text-slate-400 uppercase tracking-widest px-2 w-[13%] cursor-pointer hover:text-indigo-600" onClick={() => handleSort('revision')}>Rev {sortConfig?.key === 'revision' ? (sortConfig.direction === 'asc' ? '↑' : '↓') : ''}</th>
+                    )}
+                    <th className={`pb-3 text-[10px] font-black text-slate-400 uppercase tracking-widest px-2 ${!isFullDashboard ? 'w-[13%]' : 'w-[15%]'} cursor-pointer hover:text-indigo-600`} onClick={() => handleSort('supplierName')}>Supplier {sortConfig?.key === 'supplierName' ? (sortConfig.direction === 'asc' ? '↑' : '↓') : ''}</th>
+                    <th className={`pb-3 text-[10px] font-black text-slate-400 uppercase tracking-widest text-center ${!isFullDashboard ? 'w-[13%]' : 'w-[15%]'} pr-4 cursor-pointer hover:text-indigo-600`} onClick={() => handleSort('status')}>Status {sortConfig?.key === 'status' ? (sortConfig.direction === 'asc' ? '↑' : '↓') : ''}</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-50">
                   {paginatedSubmissions.length === 0 ? (
                     <tr>
-                      <td colSpan={isFullDashboard ? 4 : 5} className="py-16 text-center align-middle">
+                      <td colSpan={!isFullDashboard ? 6 : 5} className="py-16 text-center align-middle">
                         <div className="flex flex-col items-center gap-3">
                           <div className="w-10 h-10 bg-slate-50 rounded-full flex items-center justify-center">
                             <svg className="w-5 h-5 text-slate-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -330,27 +373,31 @@ const IQADashboard: React.FC<IQADashboardProps> = ({ submissions, onViewDetail, 
                         onClick={() => onViewDetail(sub.id)}
                         className="cursor-pointer hover:bg-slate-100 transition-colors duration-150 group"
                       >
-                        <td className="py-4 pl-4 pr-2 align-middle">
-                          <span className="font-mono text-[10px] md:text-xs text-slate-500 bg-slate-100 px-2 py-1 rounded-lg inline-block truncate max-w-full group-hover:bg-indigo-50 group-hover:text-indigo-600 transition-colors">
-                            {sub.id.split('-')[1]}
-                          </span>
+                        <td className="py-4 pl-4 pr-2 align-middle overflow-hidden">
+                          <div className="text-[10px] text-slate-500 font-bold uppercase truncate max-w-full">
+                            {sub.id}
+                          </div>
                         </td>
                         <td className="py-4 px-2 overflow-hidden align-middle">
-                          <div className="font-black text-slate-800 text-xs md:text-sm tracking-tight truncate max-w-full">
-                            {sub.partNumber} / {sub.revision}
+                          <div className="font-black text-slate-800 text-[11px] md:text-sm tracking-tight truncate max-w-full">
+                            {sub.partName}
                           </div>
-                          <div className="text-[8px] text-slate-400 font-bold uppercase md:hidden truncate max-w-full">{sub.supplierName}</div>
-                        </td>
-                        <td className="py-4 px-2 hidden md:table-cell align-middle">
-                          <div className="text-[10px] text-slate-500 font-bold uppercase truncate max-w-full">{sub.supplierName}</div>
                         </td>
                         {!isFullDashboard && (
-                          <td className="py-4 px-2 pr-10 hidden md:table-cell align-middle">
-                            <div className="text-[10px] text-slate-500 font-bold uppercase whitespace-nowrap bg-slate-50 px-2.5 py-1.5 rounded-lg border border-slate-100 inline-block">
-                              {new Date(sub.timestamp).toLocaleDateString(undefined, { day: '2-digit', month: 'short', year: 'numeric' })}
+                          <td className="py-4 px-2 align-middle overflow-hidden">
+                            <div className="text-[10px] text-slate-500 font-bold uppercase truncate max-w-full">
+                              {new Date(sub.lastUpdated || sub.created_at || Date.now()).toLocaleDateString(undefined, { day: '2-digit', month: 'short', year: 'numeric' })}
                             </div>
                           </td>
                         )}
+                        {!isFullDashboard && (
+                          <td className="py-4 px-2 align-middle overflow-hidden">
+                            <div className="text-[10px] text-slate-500 font-bold uppercase truncate max-w-full">Rev {sub.revision ?? 0}</div>
+                          </td>
+                        )}
+                        <td className="py-4 px-2 align-middle overflow-hidden">
+                          <div className="text-[10px] text-slate-500 font-bold uppercase truncate max-w-full">{sub.supplierName}</div>
+                        </td>
                         <td className="py-4 text-center pr-4 align-middle">
                           <div className="flex justify-center">
                             <StatusBadge status={sub.status} />
@@ -364,12 +411,12 @@ const IQADashboard: React.FC<IQADashboardProps> = ({ submissions, onViewDetail, 
             </div>
           </div>
 
-          {totalPages > 1 && (
-            <div className="mt-6 pt-6 border-t border-slate-50 flex items-center justify-between">
-              <div className="text-[10px] md:text-xs font-black text-slate-400 uppercase tracking-widest">
+          {totalPages > 1 ? (
+            <div className="mt-6 pt-6 border-t border-slate-50 flex flex-col sm:flex-row items-center justify-between gap-4 sm:gap-0">
+              <div className="text-[10px] md:text-xs font-black text-slate-400 uppercase tracking-widest whitespace-nowrap">
                 Showing <span className="text-slate-900">{paginatedSubmissions.length}</span> of <span className="text-slate-900">{sortedSubmissions.length}</span> results
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 shrink-0">
                 <button
                   onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
                   disabled={currentPage === 1}
@@ -381,7 +428,7 @@ const IQADashboard: React.FC<IQADashboardProps> = ({ submissions, onViewDetail, 
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 19l-7-7 7-7" />
                   </svg>
                 </button>
-                <div className="px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-[10px] font-black text-slate-600">{currentPage} / {totalPages}</div>
+                <div className="px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-[10px] font-black text-slate-600 whitespace-nowrap">{currentPage} / {totalPages}</div>
                 <button
                   onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
                   disabled={currentPage === totalPages}
@@ -393,6 +440,12 @@ const IQADashboard: React.FC<IQADashboardProps> = ({ submissions, onViewDetail, 
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5l7 7-7 7" />
                   </svg>
                 </button>
+              </div>
+            </div>
+          ) : (
+            <div className="mt-6 pt-6 border-t border-slate-50 flex items-center justify-start">
+              <div className="text-[10px] md:text-xs font-black text-slate-400 uppercase tracking-widest whitespace-nowrap">
+                Showing <span className="text-slate-900">{sortedSubmissions.length}</span> results
               </div>
             </div>
           )}
@@ -437,7 +490,7 @@ const IQADashboard: React.FC<IQADashboardProps> = ({ submissions, onViewDetail, 
               {[
                 { name: 'Approved', value: stats.approved, color: '#10b981' },
                 { name: 'Rejected', value: stats.rejected, color: '#ef4444' },
-                { name: 'Pending', value: stats.pendingReview, color: '#f59e0b' },
+                { name: 'Pending/AI', value: stats.pendingReview, color: '#f59e0b' },
               ].map((item) => (
                 <div key={item.name} className="flex justify-between items-center bg-slate-50/80 p-2.5 rounded-xl border border-slate-100">
                   <div className="flex items-center gap-3">
@@ -455,19 +508,18 @@ const IQADashboard: React.FC<IQADashboardProps> = ({ submissions, onViewDetail, 
   );
 };
 
-export const StatusBadge: React.FC<{ status: SubmissionStatus }> = ({ status }) => {
-  const configs: Record<SubmissionStatus, { label: string; class: string }> = {
+export const StatusBadge: React.FC<{ status: SubmissionStatus | string }> = ({ status }) => {
+  const configs: Record<string, { label: string; class: string }> = {
     [SubmissionStatus.DRAFT]: { label: 'Draft', class: 'bg-slate-100 text-slate-600' },
-    [SubmissionStatus.PENDING_AI]: { label: 'AI Queue', class: 'bg-slate-50 text-slate-400' },
     [SubmissionStatus.AI_REVIEWING]: { label: 'AI Processing', class: 'bg-indigo-50 text-indigo-600 animate-pulse' },
     [SubmissionStatus.PENDING_REVIEW]: { label: 'Needs Review', class: 'bg-amber-100 text-amber-700 border border-amber-200' },
     [SubmissionStatus.APPROVED]: { label: 'Approved', class: 'bg-emerald-100 text-emerald-700' },
     [SubmissionStatus.REJECTED]: { label: 'Rejected', class: 'bg-rose-100 text-rose-700' },
   };
 
-  const config = configs[status];
+  const config = configs[status as string] || { label: status || 'Unknown', class: 'bg-slate-100 text-slate-600' };
   return (
-    <span className={`inline-flex items-center justify-center px-2 py-0.5 md:px-2.5 md:py-1 rounded-full text-[8px] md:text-[10px] font-black uppercase tracking-widest whitespace-nowrap ${config.class}`}>
+    <span className={`inline-flex items-center justify-center px-2 py-0.5 md:px-2.5 md:py-1 rounded-full text-[8px] md:text-[10px] font-black uppercase tracking-widest whitespace-nowrap overflow-hidden text-ellipsis max-w-full min-w-0 ${config.class}`}>
       {config.label}
     </span>
   );

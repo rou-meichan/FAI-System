@@ -2,19 +2,21 @@
 import React, { useState, useRef } from 'react';
 import { User, UserRole } from '../types';
 import authService from '../services/authService';
+import { fetchProfile } from '../services/faiService';
 
 interface LoginPageProps {
   onLogin: (user: User) => void;
 }
 
 const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
-  const [role, setRole] = useState<UserRole>('SUPPLIER');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const role = 'SUPPLIER'; // Default role, will be overridden by profile data
   
   const emailRef = useRef<HTMLInputElement>(null);
   const passwordRef = useRef<HTMLInputElement>(null);
   const [resetSent, setResetSent] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
 
   const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -27,17 +29,40 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
     try {
       const authData = await authService.login(email, password);
       if (authData?.user) {
+        let profileData: any = {};
+        try {
+          profileData = await fetchProfile(authData.user.id);
+        } catch (e) {
+          console.error('Failed to fetch user profile:', e);
+        }
+
+        if (profileData?.status === 'DEACTIVATED') {
+          await authService.logout();
+          throw new Error('Your account has been deactivated. Please contact the administrator.');
+        }
+
+        const userRole = profileData?.role || authData.user.app_metadata?.role || authData.user.user_metadata?.role || role;
         const user: User = {
           id: authData.user.id,
-          name: authData.user.user_metadata?.name || email.split('@')[0],
-          role: authData.user.user_metadata?.role || role,
-          organization: authData.user.user_metadata?.organization || (role === 'SUPPLIER' ? 'ABC Manufacturing' : 'Global IQA Office'),
+          name: profileData?.name || authData.user.user_metadata?.name || email.split('@')[0],
+          email: authData.user.email || email,
+          role: userRole,
+          organization: profileData?.organization || authData.user.user_metadata?.organization || (userRole === 'SUPPLIER' ? 'ABC Manufacturing' : 'Global IQA Office'),
+          createdDate: profileData?.created_at ? new Date(profileData.created_at).getTime() : new Date(authData.user.created_at).getTime(),
+          gender: profileData?.gender || authData.user.user_metadata?.gender,
+          date_of_birth: profileData?.date_of_birth || authData.user.user_metadata?.date_of_birth,
+          phone_number: profileData?.phone_number || authData.user.user_metadata?.phone_number
         };
         onLogin(user);
       }
     } catch (err: any) {
       console.error('Auth error:', err);
-      setError(err.message || 'Authentication failed. Please check your credentials.');
+      // Handle Supabase rate limit errors (status 429)
+      if (err.status === 429 || err.message?.toLowerCase().includes('rate limit') || err.message?.toLowerCase().includes('too many requests')) {
+        setError('Too many attempts. Please wait a few minutes before trying again.');
+      } else {
+        setError(err.message || 'Authentication failed. Please check your credentials.');
+      }
     } finally {
       setIsLoading(false);
     }
@@ -53,11 +78,30 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
     setIsLoading(true);
     setError(null);
     try {
+      // 1. Check if email exists in the database
+      const response = await fetch('/api/check-email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email })
+      });
+      
+      const data = await response.json();
+      
+      if (!data.exists) {
+        setError('No account found with this email address.');
+        return;
+      }
+
+      // 2. If exists, send password reset
       await authService.resetPassword(email);
       setResetSent(true);
     } catch (err: any) {
       console.error('Reset password error:', err);
-      setError(err.message || 'Failed to send reset email.');
+      if (err.status === 429 || err.message?.toLowerCase().includes('rate limit') || err.message?.toLowerCase().includes('too many requests')) {
+        setError('Too many reset attempts. Please wait a few minutes before trying again.');
+      } else {
+        setError(err.message || 'Failed to send reset email.');
+      }
     } finally {
       setIsLoading(false);
     }
@@ -100,34 +144,6 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
               </div>
             ) : (
               <form onSubmit={handleAuth} className="space-y-4 md:space-y-5">
-                <div className="space-y-2">
-                  <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest">Select Portal Access</label>
-                  <div className="grid grid-cols-2 gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setRole('SUPPLIER')}
-                      className={`py-2.5 px-4 rounded-xl text-xs font-bold border-2 transition-all ${
-                        role === 'SUPPLIER' 
-                          ? 'border-indigo-600 bg-indigo-50 text-indigo-700' 
-                          : 'border-slate-100 bg-white text-slate-500 hover:border-slate-200'
-                      }`}
-                    >
-                      Supplier
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setRole('IQA')}
-                      className={`py-2.5 px-4 rounded-xl text-xs font-bold border-2 transition-all ${
-                        role === 'IQA' 
-                          ? 'border-indigo-600 bg-indigo-50 text-indigo-700' 
-                          : 'border-slate-100 bg-white text-slate-500 hover:border-slate-200'
-                      }`}
-                    >
-                      IQA Office
-                    </button>
-                  </div>
-                </div>
-
                 <div className="space-y-3">
                   {error && (
                     <div className="p-3 bg-rose-50 border border-rose-100 rounded-xl text-[10px] font-bold text-rose-600 uppercase tracking-tight">
@@ -136,13 +152,13 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
                   )}
 
                   <div>
-                    <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 ml-1">Work Email</label>
+                    <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 ml-1">Email</label>
                     <input 
                       type="email" 
                       ref={emailRef}
                       required
                       className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none transition-all text-sm font-medium"
-                      placeholder="name@company.com"
+                      placeholder="abc123@gmail.com"
                     />
                   </div>
                   <div>
@@ -157,13 +173,31 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
                       </button>
                     </div>
 
-                    <input 
-                      type="password" 
-                      ref={passwordRef}
-                      required
-                      className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none transition-all text-sm font-medium"
-                      placeholder="••••••••"
-                    />
+                    <div className="relative">
+                      <input 
+                        type={showPassword ? "text" : "password"} 
+                        ref={passwordRef}
+                        required
+                        className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none transition-all text-sm font-medium pr-10"
+                        placeholder="••••••••"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword(!showPassword)}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors"
+                      >
+                        {showPassword ? (
+                          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l18 18" />
+                          </svg>
+                        ) : (
+                          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                          </svg>
+                        )}
+                      </button>
+                    </div>
                   </div>
                 </div>
 

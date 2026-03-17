@@ -34,3 +34,14 @@ export const getFileUrl = async (path: string, expiresIn: number = 3600) => {
   
   return data.signedUrl;
 };
+
+export const deleteFile = async (path: string) => {
+  const { error } = await supabase.storage
+    .from(BUCKET_NAME)
+    .remove([path]);
+
+  if (error) {
+    console.error('Supabase Storage Delete Error:', error);
+    // We don't throw here to avoid blocking the main flow if cleanup fails
+  }
+};

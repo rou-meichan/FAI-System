@@ -248,23 +248,26 @@ const AccountManagement: React.FC<AccountManagementProps> = ({
       </div>
 
       <div className="bg-white rounded-[1.5rem] md:rounded-[2rem] shadow-sm border border-slate-200 flex flex-col min-h-[400px] overflow-visible">
-        <div className="w-full">
-          <table className="w-full text-left table-fixed border-collapse">
+        <div className="w-full overflow-x-auto">
+          <table className="w-full text-left table-fixed border-collapse min-w-[600px] md:min-w-0">
             <thead className="bg-slate-50/50">
               <tr className="border-b border-slate-100">
-                <th className="px-4 md:px-8 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest w-[40%] md:w-auto">
-                  {activeTab === 'SUPPLIERS' ? 'Name' : 'IQA Personnel'}
+                <th className="px-4 md:px-8 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest w-[35%] sm:w-[25%] md:w-[18%]">
+                  Name
                 </th>
-                <th className="px-3 md:px-8 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest w-[20%] md:w-auto">
-                  {activeTab === 'SUPPLIERS' ? 'Organization' : 'Role'}
+                <th className="px-3 md:px-8 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest hidden sm:table-cell w-[25%] md:w-[22%]">
+                  Email
                 </th>
-                <th className="px-3 md:px-8 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest text-center w-[15%] md:w-36">
+                <th className="px-3 md:px-8 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest w-[35%] sm:w-[25%] md:w-[22%]">
+                  {activeTab === 'SUPPLIERS' ? 'Organization' : 'Mobile Phone'}
+                </th>
+                <th className="px-3 md:px-8 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest text-center w-[15%] md:w-[15%]">
                   Status
                 </th>
-                <th className="px-8 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest hidden md:table-cell w-48">
+                <th className="px-8 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest hidden md:table-cell md:w-[13%]">
                   Joined
                 </th>
-                <th className="px-5 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right pr-12 hidden md:table-cell w-24">
+                <th className="px-2 md:px-8 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right pr-4 md:pr-12 w-[15%] sm:w-[10%] md:w-[10%]">
                   Actions
                 </th>
               </tr>
@@ -272,7 +275,7 @@ const AccountManagement: React.FC<AccountManagementProps> = ({
             <tbody className="divide-y divide-slate-50">
               {paginatedItems.length === 0 ? (
                 <tr>
-                  <td colSpan={5} className="px-8 py-24 text-center align-middle">
+                  <td colSpan={6} className="px-8 py-24 text-center align-middle">
                     <p className="text-slate-400 italic font-bold text-xs uppercase tracking-widest">No matching records found</p>
                   </td>
                 </tr>
@@ -289,14 +292,19 @@ const AccountManagement: React.FC<AccountManagementProps> = ({
                           <p className={`text-xs md:text-sm font-black tracking-tight truncate ${item.status === 'DEACTIVATED' ? 'text-slate-400' : 'text-slate-800'}`}>
                             {item.name}
                           </p>
-                          <p className="text-[9px] md:text-[10px] text-slate-400 font-bold uppercase truncate">
+                          <p className="text-[9px] md:text-[10px] text-slate-400 font-bold uppercase truncate sm:hidden">
                             {item.email}
                           </p>
                         </div>
                       </td>
+                      <td className="px-3 md:px-8 py-5 align-middle overflow-hidden hidden sm:table-cell">
+                        <p className="text-[10px] text-slate-600 font-bold uppercase truncate">
+                          {item.email}
+                        </p>
+                      </td>
                       <td className="px-3 md:px-8 py-5 align-middle overflow-hidden">
                         <p className="text-[10px] text-slate-600 font-bold uppercase truncate">
-                          {activeTab === 'SUPPLIERS' ? (item as SupplierAccount).organization : (item as EmployeeAccount).role}
+                          {activeTab === 'SUPPLIERS' ? (item as SupplierAccount).organization : ((item as EmployeeAccount).phone_number || 'N/A')}
                         </p>
                       </td>
                       <td className="px-3 md:px-8 py-5 text-center align-middle">
@@ -311,13 +319,13 @@ const AccountManagement: React.FC<AccountManagementProps> = ({
                           {new Date(item.createdDate).toLocaleDateString(undefined, { day: '2-digit', month: 'short', year: 'numeric' })}
                         </div>
                       </td>
-                      <td className="px-8 py-5 text-right pr-12 align-middle hidden md:table-cell">
+                      <td className="px-2 md:px-8 py-5 text-right pr-4 md:pr-12 align-middle">
                         <div className="relative inline-block" onClick={(e) => e.stopPropagation()}>
                           <button 
                             onClick={(e) => { e.stopPropagation(); setActiveMenu(activeMenu === item.id ? null : item.id); }}
-                            className={`p-2 rounded-xl transition-all active:scale-90 border ${activeMenu === item.id ? 'bg-indigo-600 text-white border-indigo-600 shadow-lg' : 'text-slate-400 hover:text-indigo-600 hover:bg-white hover:border-slate-100'}`}
+                            className={`yoy dian kai shi ai shui le. xing hao du zi mei you tong le bu ran yi zhi qu sahng ce suo deng xia ren jia yi wei wo zheng tian tou pao qu c e shou mo yu. keais du zi bu tong le, jie gou ai shui le chi wan wu fan jiu shi ai shui dian fen zhen de shi tai ke pa le p-2 rounded-xl transition-all active:scale-90 border ${activeMenu === item.id ? 'bg-indigo-600 text-white border-indigo-600 shadow-lg' : 'text-slate-400 hover:text-indigo-600 hover:bg-white hover:border-slate-100'}`}
                           >
-                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <svg className="zao zhi dao ni zhi shi fei niao yong bao hou shou zhong zhi sheng xia yu mao dang chu ni you he bi lang fei na me duo ka fei he mei guiw-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 5v.01M12 12v.01M12 19v.01" />
                             </svg>
                           </button>
@@ -344,7 +352,8 @@ const AccountManagement: React.FC<AccountManagementProps> = ({
                                 {item.status === 'ACTIVE' ? 'Deactivate' : 'Activate'}
                               </button>
                             </div>
-                          )}
+                          )
+                        }
                         </div>
                       </td>
                     </tr>
@@ -355,30 +364,41 @@ const AccountManagement: React.FC<AccountManagementProps> = ({
           </table>
         </div>
 
-        {totalPages > 1 && (
-          <div className="mt-auto px-6 py-4 border-t border-slate-50 flex items-center justify-between" onClick={(e) => e.stopPropagation()}>
-            <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
-              Page <span className="text-slate-900">{currentPage}</span> of {totalPages}
+        {totalPages > 1 ? (
+          <div className="mt-auto px-6 py-4 border-t border-slate-50 flex flex-col sm:flex-row items-center justify-between gap-4 sm:gap-0" onClick={(e) => e.stopPropagation()}>
+            <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap">
+              Showing <span className="text-slate-900">{paginatedItems.length}</span> of <span className="text-slate-900">{filteredItems.length}</span> results
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 shrink-0">
               <button
                 onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
                 disabled={currentPage === 1}
-                className={`p-2 rounded-lg border ${currentPage === 1 ? 'bg-slate-50 text-slate-200 cursor-not-allowed' : 'bg-white text-slate-600 hover:text-indigo-600 shadow-sm'}`}
+                className={`p-2 rounded-xl border transition-all ${
+                  currentPage === 1 ? 'bg-slate-50 border-slate-100 text-slate-300 cursor-not-allowed' : 'bg-white border-slate-200 text-slate-600 hover:border-indigo-600 hover:text-indigo-600 active:scale-95 shadow-sm'
+                }`}
               >
                 <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 19l-7-7 7-7" />
                 </svg>
               </button>
+              <div className="px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-[10px] font-black text-slate-600 whitespace-nowrap">{currentPage} / {totalPages}</div>
               <button
                 onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
                 disabled={currentPage === totalPages}
-                className={`p-2 rounded-lg border ${currentPage === totalPages ? 'bg-slate-50 text-slate-200 cursor-not-allowed' : 'bg-white text-slate-600 hover:text-indigo-600 shadow-sm'}`}
+                className={`p-2 rounded-xl border transition-all ${
+                  currentPage === totalPages ? 'bg-slate-50 border-slate-100 text-slate-300 cursor-not-allowed' : 'bg-white border-slate-200 text-slate-600 hover:border-indigo-600 hover:text-indigo-600 active:scale-95 shadow-sm'
+                }`}
               >
                 <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5l7 7-7 7" />
                 </svg>
               </button>
+            </div>
+          </div>
+        ) : (
+          <div className="mt-auto px-6 py-4 border-t border-slate-50 flex items-center justify-start" onClick={(e) => e.stopPropagation()}>
+            <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap">
+              Showing <span className="text-slate-900">{filteredItems.length}</span> results
             </div>
           </div>
         )}

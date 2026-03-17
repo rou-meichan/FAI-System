@@ -1,7 +1,6 @@
 
 export enum SubmissionStatus {
   DRAFT = 'DRAFT',
-  PENDING_AI = 'PENDING_AI',
   AI_REVIEWING = 'AI_REVIEWING',
   PENDING_REVIEW = 'PENDING_REVIEW',
   APPROVED = 'APPROVED',
@@ -34,23 +33,27 @@ export interface FAIFile {
 }
 
 export interface FAISubmission {
-  id: string;
-  supplierName: string;
-  partNumber: string;
-  revision: string;
-  timestamp: number;
+  id: string; // Part Number
+  user_id?: string;
+  partName: string; // Part Name
+  revision?: number;
+  supplierName?: string;
+  created_at?: string;
+  lastUpdated?: string;
   status: SubmissionStatus;
   files: FAIFile[];
   iqaRemarks?: string;
   isNewVerdict?: boolean;
   aiAnalysis?: {
-    overallVerdict: 'APPROVED' | 'REJECTED';
+    overallVerdict: 'APPROVED' | 'REJECTED' | 'ERROR';
     summary: string;
-    details: {
+    details?: {
       docType: DocType;
       result: 'PASS' | 'FAIL' | 'NOT_APPLICABLE';
       notes: string;
     }[];
+    retryTimestamp?: number;
+    error?: string;
   };
 }
 

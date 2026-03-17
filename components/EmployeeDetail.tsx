@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { EmployeeAccount } from '../types';
 
@@ -20,7 +19,7 @@ const EmployeeDetail: React.FC<EmployeeDetailProps> = ({
   const [isUpdating, setIsUpdating] = useState(false);
   const [isEditing, setIsEditing] = useState(initialEditMode);
   const [showSuccess, setShowSuccess] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [formData, setFormData] = useState({
     name: employee.name,
     gender: employee.gender || '',
@@ -39,7 +38,7 @@ const EmployeeDetail: React.FC<EmployeeDetailProps> = ({
   };
 
   const validateDOB = (dob: string) => {
-    if (!dob) return 'Date of Birth is required';
+    if (!dob) return null; // Optional
     const birthDate = new Date(dob);
     const today = new Date();
     let age = today.getFullYear() - birthDate.getFullYear();
@@ -52,6 +51,7 @@ const EmployeeDetail: React.FC<EmployeeDetailProps> = ({
   };
 
   const validatePhone = (phone: string) => {
+    if (!phone) return null; // Optional
     const digits = phone.replace(/\D/g, '');
     if (digits.length < 10 || digits.length > 11) return 'Phone number must be 10-11 digits';
     return null;
@@ -69,17 +69,23 @@ const EmployeeDetail: React.FC<EmployeeDetailProps> = ({
 
   const handleUpdate = (e: React.FormEvent) => {
     e.preventDefault();
-    setError(null);
+    const newErrors: Record<string, string> = {};
 
     const nameErr = validateName(formData.name);
-    if (nameErr) { setError(nameErr); return; }
+    if (nameErr) newErrors.name = nameErr;
 
     const dobErr = validateDOB(formData.date_of_birth);
-    if (dobErr) { setError(dobErr); return; }
+    if (dobErr) newErrors.date_of_birth = dobErr;
 
     const phoneErr = validatePhone(formData.phone_number);
-    if (phoneErr) { setError(phoneErr); return; }
+    if (phoneErr) newErrors.phone_number = phoneErr;
 
+    if (Object.keys(newErrors).length > 0) {
+      setFieldErrors(newErrors);
+      return;
+    }
+
+    setFieldErrors({});
     setIsUpdating(true);
     
     // Simulate API delay
@@ -94,40 +100,26 @@ const EmployeeDetail: React.FC<EmployeeDetailProps> = ({
 
   return (
     <div className="space-y-6 md:space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500 pb-20">
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
-        <div className="flex items-center gap-4">
-          <button onClick={onBack} className="p-2 hover:bg-slate-200 rounded-full transition-colors text-slate-600">
-            <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-6">
+        <div className="flex items-start gap-3 md:gap-4 flex-1 min-w-0">
+          <button 
+            onClick={onBack} 
+            className="w-10 h-10 flex items-center justify-center bg-slate-50 hover:bg-slate-100 rounded-lg md:rounded-xl transition-all text-slate-600 active:scale-95 shrink-0 border border-slate-100"
+          >
+            <svg className="w-4 h-4 md:w-5 md:h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
             </svg>
           </button>
-          <div>
+          <div className="min-w-0">
             <h1 className="text-xl md:text-2xl font-black text-slate-900 tracking-tight uppercase leading-none">IQA Personnel Profile</h1>
             <p className="text-slate-500 font-medium text-[10px] md:text-xs mt-1">Administrative view and identity management</p>
           </div>
-        </div>
-        <div className="flex gap-3">
-          {!isEditing ? (
-            <button 
-              onClick={() => setIsEditing(true)}
-              className="px-6 py-2.5 bg-white border border-slate-200 rounded-xl font-black text-[10px] text-slate-600 hover:border-indigo-600 hover:text-indigo-600 transition-all shadow-sm uppercase tracking-widest"
-            >
-              Edit Profile
-            </button>
-          ) : (
-            <button 
-              onClick={() => setIsEditing(false)}
-              className="px-6 py-2.5 bg-slate-100 rounded-xl font-black text-[10px] text-slate-600 hover:bg-slate-200 transition-all uppercase tracking-widest"
-            >
-              Cancel
-            </button>
-          )}
         </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 md:gap-8">
         {/* Profile Card */}
-        <div className="lg:col-span-1 space-y-6 lg:sticky lg:top-8 self-start">
+        <div className="lg:col-span-1 space-y-6 lg:sticky lg:top-24 self-start">
           <div className="bg-white rounded-[1.5rem] md:rounded-[2rem] shadow-xl border border-slate-200 overflow-hidden">
             <div className={`h-20 ${employee.status === 'ACTIVE' ? 'bg-indigo-600' : 'bg-slate-400'}`}></div>
             <div className="px-6 pb-6 -mt-10 text-center">
@@ -179,11 +171,6 @@ const EmployeeDetail: React.FC<EmployeeDetailProps> = ({
                 {isEditing ? 'Modify Personnel Records' : 'Identity Information'}
               </h3>
               <div className="flex items-center gap-3">
-                {error && (
-                  <span className="text-[9px] font-black text-rose-600 bg-rose-50 px-3 py-1 rounded-full border border-rose-100 animate-in fade-in slide-in-from-right-2 duration-300">
-                    {error}
-                  </span>
-                )}
                 {showSuccess && (
                   <span className="text-[9px] font-black text-emerald-600 bg-emerald-50 px-3 py-1 rounded-full border border-emerald-100 animate-in fade-in slide-in-from-right-2 duration-300">
                     Profile Updated
@@ -200,11 +187,15 @@ const EmployeeDetail: React.FC<EmployeeDetailProps> = ({
                     type="text" 
                     readOnly={!isEditing}
                     value={formData.name}
-                    onChange={e => setFormData({...formData, name: e.target.value})}
+                    onChange={e => {
+                      setFormData({...formData, name: e.target.value});
+                      if (fieldErrors.name) setFieldErrors(prev => ({...prev, name: ''}));
+                    }}
                     className={`w-full px-4 py-2.5 rounded-xl outline-none transition-all font-bold text-xs shadow-inner ${
-                      isEditing ? 'bg-slate-50 border border-slate-200 focus:ring-4 focus:ring-indigo-50 focus:border-indigo-600' : 'bg-slate-100/50 border border-transparent cursor-not-allowed'
-                    }`}
+                      isEditing ? 'bg-slate-50 border border-slate-200 focus:ring-4 focus:ring-indigo-50 focus:border-indigo-600' : 'bg-slate-100/50 border border-transparent cursor-not-allowed text-slate-500'
+                    } ${fieldErrors.name ? 'border-rose-300 ring-4 ring-rose-50' : ''}`}
                   />
+                  {fieldErrors.name && <p className="text-[8px] font-black text-rose-500 uppercase mt-1 ml-1">{fieldErrors.name}</p>}
                 </div>
                 <div className="space-y-1">
                   <label className="block text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1 flex items-center gap-1.5">
@@ -242,12 +233,18 @@ const EmployeeDetail: React.FC<EmployeeDetailProps> = ({
                 <div className="space-y-1">
                   <label className="block text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1">Date of Birth</label>
                   {isEditing ? (
-                    <input 
-                      type="date" 
-                      value={formData.date_of_birth}
-                      onChange={e => setFormData({...formData, date_of_birth: e.target.value})}
-                      className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-4 focus:ring-indigo-50 focus:border-indigo-600 outline-none font-bold text-xs shadow-inner"
-                    />
+                    <div className="space-y-1">
+                      <input 
+                        type="date" 
+                        value={formData.date_of_birth}
+                        onChange={e => {
+                          setFormData({...formData, date_of_birth: e.target.value});
+                          if (fieldErrors.date_of_birth) setFieldErrors(prev => ({...prev, date_of_birth: ''}));
+                        }}
+                        className={`w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-4 focus:ring-indigo-50 focus:border-indigo-600 outline-none font-bold text-xs shadow-inner ${fieldErrors.date_of_birth ? 'border-rose-300 ring-4 ring-rose-50' : ''}`}
+                      />
+                      {fieldErrors.date_of_birth && <p className="text-[8px] font-black text-rose-500 uppercase mt-1 ml-1">{fieldErrors.date_of_birth}</p>}
+                    </div>
                   ) : (
                     <input 
                       type="text" 
@@ -263,12 +260,16 @@ const EmployeeDetail: React.FC<EmployeeDetailProps> = ({
                     type="tel" 
                     readOnly={!isEditing}
                     value={formData.phone_number}
-                    onChange={handlePhoneChange}
-                    placeholder="011-12345678"
+                    onChange={e => {
+                      handlePhoneChange(e);
+                      if (fieldErrors.phone_number) setFieldErrors(prev => ({...prev, phone_number: ''}));
+                    }}
+                    placeholder="e.g., 011-12345678"
                     className={`w-full px-4 py-2.5 rounded-xl outline-none transition-all font-bold text-xs shadow-inner ${
-                      isEditing ? 'bg-slate-50 border border-slate-200 focus:ring-4 focus:ring-indigo-50 focus:border-indigo-600' : 'bg-slate-100/50 border border-transparent cursor-not-allowed'
-                    }`}
+                      isEditing ? 'bg-slate-50 border border-slate-200 focus:ring-4 focus:ring-indigo-50 focus:border-indigo-600' : 'bg-slate-100/50 border border-transparent cursor-not-allowed text-slate-500'
+                    } ${fieldErrors.phone_number ? 'border-rose-300 ring-4 ring-rose-50' : ''}`}
                   />
+                  {fieldErrors.phone_number && <p className="text-[8px] font-black text-rose-500 uppercase mt-1 ml-1">{fieldErrors.phone_number}</p>}
                 </div>
                 <div className="space-y-1">
                   <label className="block text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1">Organization</label>
@@ -281,17 +282,51 @@ const EmployeeDetail: React.FC<EmployeeDetailProps> = ({
                 </div>
               </div>
               
-              {isEditing && (
-                <div className="flex justify-end pt-4 border-t border-slate-50">
-                  <button 
-                    type="submit"
-                    disabled={isUpdating}
-                    className="bg-slate-900 text-white px-8 py-2.5 rounded-xl text-[9px] font-black uppercase tracking-widest shadow-xl shadow-slate-100 hover:bg-black transition-all active:scale-95 disabled:opacity-50"
-                  >
-                    {isUpdating ? 'Saving...' : 'Save Profile Changes'}
-                  </button>
-                </div>
-              )}
+              {/* Bottom save button removed and moved to top right */}
+              <div className="pt-6 border-t border-slate-50 flex flex-col sm:flex-row gap-3">
+                {isEditing ? (
+                  <>
+                    <button 
+                      type="submit"
+                      disabled={isUpdating}
+                      className="flex-1 px-8 py-3 bg-indigo-600 text-white rounded-xl md:rounded-2xl font-black text-xs md:text-[10px] hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-100 uppercase tracking-widest active:scale-95 disabled:opacity-50"
+                    >
+                      {isUpdating ? 'Saving...' : 'Save Changes'}
+                    </button>
+                    <button 
+                      type="button"
+                      onClick={() => {
+                        setIsEditing(false);
+                        setFieldErrors({});
+                      }}
+                      className="flex-1 px-8 py-3 bg-slate-100 rounded-xl md:rounded-2xl font-black text-xs md:text-[10px] text-slate-600 hover:bg-slate-200 transition-all uppercase tracking-widest active:scale-95"
+                    >
+                      Cancel
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <button 
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        e.preventDefault();
+                        setIsEditing(true);
+                      }}
+                      className="flex-1 px-8 py-3 bg-white border border-slate-200 rounded-xl md:rounded-2xl font-black text-xs md:text-[10px] text-slate-600 hover:border-indigo-600 hover:text-indigo-600 transition-all shadow-sm uppercase tracking-widest"
+                    >
+                      Edit Profile
+                    </button>
+                    <button 
+                      type="button"
+                      onClick={onBack}
+                      className="flex-1 px-8 py-3 bg-slate-100 rounded-xl md:rounded-2xl font-black text-xs md:text-[10px] text-slate-600 hover:bg-slate-200 transition-all uppercase tracking-widest active:scale-95"
+                    >
+                      Back to Dashboard
+                    </button>
+                  </>
+                )}
+              </div>
             </form>
           </div>
 
